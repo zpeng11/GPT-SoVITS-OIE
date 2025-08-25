@@ -1,0 +1,12 @@
+tokenizers
+tqdm
+pypinyin
+jieba
+fast-langdetect
+split-lang
+opencc==1.1.6
+inflect
+requests
+cn2an
+ToJyutping
+wordsegment
