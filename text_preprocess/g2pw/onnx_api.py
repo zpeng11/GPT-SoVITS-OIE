@@ -13,7 +13,7 @@ from tokenizers import Tokenizer
 from ..zh_normalization.char_convert import tranditional_to_simplified
 from .dataset import get_char_phoneme_labels, get_phoneme_labels, prepare_onnx_input
 from .utils import load_config
-
+import numpy as np
 
 warnings.filterwarnings("ignore")
 
@@ -25,6 +25,27 @@ from typing import List
 from typing import Tuple
 
 
+def g2pw_predict(onnx_input: Dict[str, Any], labels: List[str]) -> Tuple[List[str], List[float]]:
+    all_preds = []
+    all_confidences = []
+    g2pw_predict_func = get_callback('g2pw_predict')  # 获取注册的回调函数
+    probs = g2pw_predict_func({
+            "input_ids": onnx_input["input_ids"],
+            "token_type_ids": onnx_input["token_type_ids"],
+            "attention_mask": onnx_input["attention_masks"],
+            "phoneme_mask": onnx_input["phoneme_masks"],
+            "char_ids": onnx_input["char_ids"],
+            "position_ids": onnx_input["position_ids"],
+        })[0]  # get probability distribution
+
+    preds = np.argmax(probs, axis=1).tolist()
+    max_probs = []
+    for index, arr in zip(preds, probs.tolist()):
+        max_probs.append(arr[index])
+    all_preds += [labels[pred] for pred in preds]
+    all_confidences += max_probs
+
+    return all_preds, all_confidences
 
 
 class G2PWOnnxConverter:
@@ -142,17 +163,12 @@ class G2PWOnnxConverter:
             window_size=None,
         )
 
-        all_preds = []
-        g2pw_predict_func = get_callback('g2pw_predict')  # 获取注册的回调函数
-        probs = g2pw_predict_func(onnx_input)  # get probability distribution
-        preds = [prob.index(max(prob)) for prob in probs]  # prediction index
-        all_preds += [self.labels[pred] for pred in preds]  # prediction values
-
+        preds, confidences = g2pw_predict(onnx_input=onnx_input, labels=self.labels)
         if self.config.use_char_phoneme:
-            all_preds = [pred.split(" ")[1] for pred in all_preds]
+            preds = [pred.split(" ")[1] for pred in preds]
 
         results = partial_results
-        for sent_id, query_id, pred in zip(sent_ids, query_ids, all_preds):
+        for sent_id, query_id, pred in zip(sent_ids, query_ids, preds):
             results[sent_id][query_id] = self.style_convert_func(pred)
 
         return results

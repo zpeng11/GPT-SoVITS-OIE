@@ -14,7 +14,7 @@ from text_preprocess import cleaned_text_to_sequence
 from runner_registry import get_callback
 from tokenizers import Tokenizer
 from text_preprocess.text_segmentation_method import split_big_text, splits, get_method as get_seg_method
-
+import numpy as np
 punctuation = set(["!", "?", "…", ",", ".", "-"])
 
 
@@ -105,7 +105,7 @@ class TextPreprocessor:
 
     def segment_and_extract_feature_for_text(
         self, text: str, language: str, version: str = "v1"
-    ) -> Tuple[List, List, str]:
+    ) -> Tuple[np.ndarray, np.ndarray, str]:
         return self.get_phones_and_bert(text, language, version)
 
     def get_phones_and_bert(self, text: str, language: str, version: str, final: bool = False):
@@ -162,30 +162,32 @@ class TextPreprocessor:
         norm_text_list = []
         for i in range(len(textlist)):
             lang = langlist[i]
+            print(f"处理片段: {textlist[i]} 语言: {lang}")
             phones, word2ph, norm_text = self.clean_text_inf(textlist[i], lang, version)
             bert = self.get_bert_inf(phones, word2ph, norm_text, lang)
             phones_list.append(phones)
             norm_text_list.append(norm_text)
-            bert_list = bert_list + bert
-        phones = sum(phones_list, [])
+            bert_list.append(bert)
+        bert = np.concatenate(bert_list, axis=0).T # shape:[N, 1024] -> [1024, N]
+        phones = np.concatenate(phones_list, axis=0).astype(np.int64)
         norm_text = "".join(norm_text_list)
 
         if not final and len(phones) < 6:
             return self.get_phones_and_bert("." + text, language, version, final=True)
 
-        return phones, bert_list, norm_text
+        return phones, bert, norm_text
 
     def get_bert_feature(self, text: str, word2ph: list) -> list:
-        inputs = [self.tokenizer.encode(text).ids]
-        res = get_callback("roberta_predict")({"input_ids":inputs})
+        inputs = np.array([self.tokenizer.encode(text).ids]).astype(np.int64)
+        res = get_callback("roberta_predict")({"input_ids":inputs})[0]
         assert len(word2ph) == len(text)
         phone_level_feature = []
         for i in range(len(word2ph)):
             num_repeats = word2ph[i]
             for _ in range(num_repeats):
-                phone_level_feature.append(res[i])
+                phone_level_feature.append(res[i:i+1, :])
 
-        return phone_level_feature # shape:[N, 1024]
+        return np.concatenate(phone_level_feature, axis=0) # shape:[N, 1024]
 
     def clean_text_inf(self, text: str, language: str, version: str = "v2"):
         language = language.replace("all_", "")
@@ -198,7 +200,7 @@ class TextPreprocessor:
         if language == "zh":
             feature = self.get_bert_feature(norm_text, word2ph)
         else:
-            feature = [[[0.0] * 1024] for _ in range(len(phones))]
+            feature = np.zeros((len(phones), 1024), dtype=np.float32)
 
         return feature
 

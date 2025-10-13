@@ -4,28 +4,45 @@ from typing import Any, Dict, List
 from runner_registry import register_callback
 import onnxruntime
 import numpy as np
+import MNN
+import MNN.numpy as mnp
 
+def g2pw_predict(inputs:Dict[str, np.ndarray]) -> List[np.ndarray]:
+    input_names = ['input_ids', 'token_type_ids', 'attention_mask', 'phoneme_mask', 'char_ids', 'position_ids']
+    output_names = ['probs']
+    # Initialize on first call
+    if not hasattr(g2pw_predict, 'mnn_model'):
+        g2pw_predict.mnn_model = MNN.nn.load_module_from_file('pretrained_models/G2PWModel/g2pW.mnn', input_names, output_names)
+        print("Initialized g2pw MNN model.")
 
-g2pw_session = onnxruntime.InferenceSession('pretrained_models/G2PWModel/g2pW.onnx', providers=["CPUExecutionProvider"])
+    mnn_inputs = []
+    for name in input_names:
+        value = inputs[name]
+        if value.dtype == np.int64:
+            value = value.astype(np.int32)
+        mnn_inputs.append(mnp.array(value))
+    mnn_outputs = g2pw_predict.mnn_model(mnn_inputs)
 
-def g2pw_predict(inputs:Dict[str, List[List]]) -> List[List[float]]:
-    for k, v in inputs.items():
-        if k != "phoneme_mask":
-            inputs[k] = np.array(v).astype(np.int64)
-        else:
-            inputs[k] = np.array(v).astype(np.float32)
-    outputs = g2pw_session.run(None, inputs)
-    return outputs[0].tolist()
+    return [mnn_output.read() for mnn_output in mnn_outputs]
 
 register_callback('g2pw_predict', g2pw_predict)
 
-roberta_session = onnxruntime.InferenceSession('pretrained_models/chinese-roberta-wwm-ext-large/chinese-roberta-wwm-ext-large.onnx', providers=["CPUExecutionProvider"])
+def roberta_predict(inputs:Dict[str, np.ndarray]) -> List[np.ndarray]:
+    input_names = ['input_ids']
+    output_names = ['logits']
+    if not hasattr(roberta_predict, 'mnn_model'):
+        roberta_predict.mnn_model = MNN.nn.load_module_from_file('pretrained_models/chinese-roberta-wwm-ext-large/chinese-roberta-wwm-ext-large.mnn',
+                                             input_names, output_names)
+        print("Initialized roberta MNN model.")
+    mnn_inputs = []
+    for name in input_names:
+        value = inputs[name]
+        if value.dtype == np.int64:
+            value = value.astype(np.int32)
+        mnn_inputs.append(mnp.array(value))
+    mnn_outputs = roberta_predict.mnn_model(mnn_inputs)
 
-def roberta_predict(inputs:Dict[str, List[List[int]]]) -> List[List[float]]:
-    for k, v in inputs.items():
-        inputs[k] = np.array(v).astype(np.int64)
-    outputs = roberta_session.run(None, inputs)
-    return outputs[0].tolist()
+    return [mnn_output.read() for mnn_output in mnn_outputs]
 
 register_callback('roberta_predict', roberta_predict)
 
@@ -49,6 +66,6 @@ print(LangSegmenter.getTexts("你好","zh"))
 from text_preprocess.text_preprocessor import TextPreprocessor
 processor = TextPreprocessor("pretrained_models/chinese-roberta-wwm-ext-large/tokenizer.json")
 
-phones, bert_features, norm_text = processor.get_phones_and_bert("卖狗?,你也喜欢まいご吗？","auto","v2")
+phones, bert_features, norm_text = processor.get_phones_and_bert("量子纠缠现象在超低温环境下表现出非局域性关联特征。","auto","v2")
 
-print(len(phones), len(bert_features), len(bert_features[0]), norm_text)
+print(phones.shape, bert_features.shape, norm_text)

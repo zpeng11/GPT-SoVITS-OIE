@@ -19,7 +19,7 @@ Credits
 from typing import Dict
 from typing import List
 from typing import Tuple
-
+import numpy as np
 from .utils import tokenize_and_map
 
 ANCHOR_CHAR = "▁"
@@ -35,7 +35,7 @@ def prepare_onnx_input(
     use_mask: bool = False,
     window_size: int = None,
     max_len: int = 512,
-) -> Dict[str, List[List]]:
+) -> Dict[str, np.array]:
     if window_size is not None:
         truncated_texts, truncated_query_ids = _truncate_texts(
             window_size=window_size, texts=texts, query_ids=query_ids
@@ -64,8 +64,8 @@ def prepare_onnx_input(
         processed_tokens = ["[CLS]"] + tokens + ["[SEP]"]
 
         input_id = [tokenizer.token_to_id(token) for token in processed_tokens]
-        token_type_id = [int(0)] * len(processed_tokens)
-        attention_mask = [int(1)] * len(processed_tokens)
+        token_type_id = [0] * len(processed_tokens)
+        attention_mask = [1] * len(processed_tokens)
 
         query_char = text[query_id]
         phoneme_mask = (
@@ -82,12 +82,12 @@ def prepare_onnx_input(
         position_ids.append(position_id)
 
     outputs = {
-        "input_ids": input_ids,
-        "token_type_ids": token_type_ids,
-        "attention_mask": attention_masks,
-        "phoneme_mask": phoneme_masks,
-        "char_ids": char_ids,
-        "position_ids": position_ids,
+        "input_ids": np.array(input_ids).astype(np.int64),
+        "token_type_ids": np.array(token_type_ids).astype(np.int64),
+        "attention_masks": np.array(attention_masks).astype(np.int64),
+        "phoneme_masks": np.array(phoneme_masks).astype(np.float32),
+        "char_ids": np.array(char_ids).astype(np.int64),
+        "position_ids": np.array(position_ids).astype(np.int64),
     }
     return outputs
 
