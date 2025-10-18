@@ -2,11 +2,11 @@
 import re
 import os
 import hashlib
+import runner_registry
 
 try:
+    os.environ["OPEN_JTALK_DICT_DIR"] = os.path.join(runner_registry.get_models_dir(),"open_jtalk_dic_utf_8-1.11")
     import pyopenjtalk
-
-    current_file_path = os.path.dirname(__file__)
 
     # 防止win下无法读取模型
     if os.name == "nt":
@@ -54,9 +54,10 @@ try:
                 hash_md5.update(chunk)
         return hash_md5.hexdigest()
 
-    USERDIC_CSV_PATH = os.path.join(current_file_path, "ja_userdic", "userdict.csv")
-    USERDIC_BIN_PATH = os.path.join(current_file_path, "ja_userdic", "user.dict")
-    USERDIC_HASH_PATH = os.path.join(current_file_path, "ja_userdic", "userdict.md5")
+    USERDIC_CSV_PATH = os.path.join(os.path.dirname(__file__), "ja_userdic", "userdict.csv")
+    os.makedirs(os.path.join(runner_registry.get_models_dir(),"ja_userdic"),exist_ok=True)
+    USERDIC_BIN_PATH = os.path.join(runner_registry.get_models_dir(), "ja_userdic", "user.dict")
+    USERDIC_HASH_PATH = os.path.join(runner_registry.get_models_dir(), "ja_userdic", "userdict.md5")
     # 如果没有用户词典，就生成一个；如果有，就检查md5，如果不一样，就重新生成
     if os.path.exists(USERDIC_CSV_PATH):
         if (

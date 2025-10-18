@@ -42,8 +42,9 @@ def merge_short_text_in_array(texts: str, threshold: int) -> list:
     return result
 
 class TextPreprocessor:
-    def __init__(self, tokenizer_path: str):
-        self.tokenizer = Tokenizer.from_file(tokenizer_path)
+    def __init__(self):
+        import runner_registry
+        self.tokenizer = Tokenizer.from_file(os.path.join(runner_registry.get_models_dir(),"chinese-roberta-wwm-ext-large","tokenizer.json"))
 
     def preprocess(self, text: str, lang: str, text_split_method: str, version: str = "v2") -> List[Dict]:
         print(f"############ 切分文本 ############")

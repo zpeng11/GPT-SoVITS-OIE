@@ -29,9 +29,8 @@ class G2PWPinyin(Pinyin):
         tone_sandhi=False,
         **kwargs,
     ):
-        uncompress_path = download_and_decompress(model_dir)
         self._g2pw = G2PWOnnxConverter(
-            model_dir=uncompress_path,
+            model_dir=model_dir,
             tokenizer_source=tokenizer_source,
             style="pinyin",
             enable_non_tradional_chinese=enable_non_tradional_chinese,

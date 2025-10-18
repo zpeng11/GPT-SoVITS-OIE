@@ -29,11 +29,12 @@ is_g2pw = True  # True if is_g2pw_str.lower() == 'true' else False
 if is_g2pw:
     # print("当前使用g2pw进行拼音推理")
     from text_preprocess.g2pw import G2PWPinyin, correct_pronunciation
-
-    parent_directory = os.path.dirname(current_file_path)
+    import runner_registry
+    G2PWMODEL_DIR = os.path.join(runner_registry.get_models_dir(),"G2PWModel")
+    ROBERTA_TOKENIZER_PATH = os.path.join(runner_registry.get_models_dir(),"chinese-roberta-wwm-ext-large","tokenizer.json")
     g2pw = G2PWPinyin(
-        model_dir="pretrained_models/G2PWModel",
-        tokenizer_source="pretrained_models/chinese-roberta-wwm-ext-large/tokenizer.json",
+        model_dir=G2PWMODEL_DIR,
+        tokenizer_source=ROBERTA_TOKENIZER_PATH,
         v_to_u=False,
         neutral_tone_with_five=True,
     )

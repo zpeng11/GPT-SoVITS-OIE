@@ -2,6 +2,8 @@ import pickle
 import os
 import re
 import wordsegment
+import runner_registry
+os.environ["NLTK_DATA"] = os.path.join(runner_registry.get_models_dir(),"nltk_data")
 from g2p_en import G2p
 
 from text_preprocess.symbols import punctuation
