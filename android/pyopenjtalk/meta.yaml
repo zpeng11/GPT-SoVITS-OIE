@@ -1,0 +1,16 @@
+package:
+  name: pyopenjtalk
+  version: "0.4.1"
+
+source:
+  git_url: https://github.com/r9y9/pyopenjtalk.git
+  git_rev: 0f0fc44e782a8134cd9a51d80b57b48a7c95bb80
+
+requirements:
+  build:
+    - cython 3.1.4
+    - setuptools 64.0.1
+    - cmake 3.21
+    - numpy 1.25.0
+  host:
+    - python

@@ -1,0 +1,9 @@
+version: '3.3'
+services:
+  ndk:
+    build: .
+    volumes:
+      - ..:/app/gsv_oie_android
+    working_dir: /
+    command: /app/gsv_oie_android/android/build.sh
+# docker-compose run --rm ndk /bin/bash # 进入容器
