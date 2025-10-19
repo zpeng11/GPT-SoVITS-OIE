@@ -10,12 +10,32 @@ import re
 from text_preprocess.LangSegmenter import LangSegmenter
 from typing import Dict, List, Tuple
 from text_preprocess.cleaner import clean_text
-from text_preprocess import cleaned_text_to_sequence
 from runner_registry import get_callback
 from tokenizers import Tokenizer
 from text_preprocess.text_segmentation_method import split_big_text, splits, get_method as get_seg_method
 import numpy as np
 punctuation = set(["!", "?", "…", ",", ".", "-"])
+
+from text_preprocess import symbols as symbols_v1
+from text_preprocess import symbols2 as symbols_v2
+
+_symbol_to_id_v1 = {s: i for i, s in enumerate(symbols_v1.symbols)}
+_symbol_to_id_v2 = {s: i for i, s in enumerate(symbols_v2.symbols)}
+
+
+def cleaned_text_to_sequence(cleaned_text, version):
+    """Converts a string of text to a sequence of IDs corresponding to the symbols in the text_preprocess.
+    Args:
+      text: string to convert to a sequence
+    Returns:
+      List of integers corresponding to the symbols in the text
+    """
+    if version == "v1":
+        phones = [_symbol_to_id_v1[symbol] for symbol in cleaned_text]
+    else:
+        phones = [_symbol_to_id_v2[symbol] for symbol in cleaned_text]
+
+    return phones
 
 
 def get_first(text: str) -> str:

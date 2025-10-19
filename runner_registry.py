@@ -1,12 +1,6 @@
 # This file is used to register various callback functions for use in the application. Mostly, these callbacks are related to model inference functions.
 # The registry allows for easy retrieval and management of these functions by name.
-from abc import ABC, abstractmethod
-from typing import Dict, List
-
-
-# def g2pw_predict(self, inputs: Dict[str, List[List]]) -> List[List[float]]:
-
-# def roberta_predict(self, inputs: Dict[str, List[List[int]]]) -> List[List[float]]:
+import os
 
 CALLBACK_REGISTRY = {}
 
@@ -29,3 +23,15 @@ def get_models_dir() -> str:
     DEFAULT_MODELS_DIR = Path(__file__).parent / "pretrained_models"
     MODELS_DIR = os.getenv("GSV_OIE_MODELS", str(DEFAULT_MODELS_DIR))
     return MODELS_DIR
+
+def set_g2pw_predict(func):
+    G2PW_MODEL_PATH = os.path.join(get_models_dir(),"G2PWModel", "g2pW.mnn")
+    def wrapper(inputs):
+        return func(G2PW_MODEL_PATH, inputs)
+    register_callback('g2pw_predict', wrapper)
+
+def set_roberta_predict(func):
+    ROBERTA_MODEL_PATH = os.path.join(get_models_dir(),"chinese-roberta-wwm-ext-large","chinese-roberta-wwm-ext-large.mnn")
+    def wrapper(inputs):
+        return func(ROBERTA_MODEL_PATH, inputs)
+    register_callback('roberta_predict', wrapper)
