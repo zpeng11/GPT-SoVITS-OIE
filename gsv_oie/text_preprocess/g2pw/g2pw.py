@@ -8,7 +8,7 @@ from pypinyin.core import Pinyin, Style
 from pypinyin.seg.simpleseg import simple_seg
 from pypinyin.converter import UltimateConverter
 from pypinyin.contrib.tone_convert import to_tone
-from text_preprocess.g2pw.onnx_api import G2PWOnnxConverter
+from .onnx_api import G2PWOnnxConverter
 import zipfile
 import requests
 

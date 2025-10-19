@@ -19,7 +19,7 @@ warnings.filterwarnings("ignore")
 
 model_version = "1.1"
 
-from runner_registry import get_callback
+from gsv_oie.runner_registry import get_callback
 
 from typing import List
 from typing import Tuple

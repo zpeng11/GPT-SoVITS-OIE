@@ -2,10 +2,10 @@
 import re
 import os
 import hashlib
-import runner_registry
+from ..runner_registry import get_models_dir
 
 try:
-    os.environ["OPEN_JTALK_DICT_DIR"] = os.path.join(runner_registry.get_models_dir(),"open_jtalk_dic_utf_8-1.11")
+    os.environ["OPEN_JTALK_DICT_DIR"] = os.path.join(get_models_dir(),"open_jtalk_dic_utf_8-1.11")
     import pyopenjtalk
 
     # 防止win下无法读取模型
@@ -78,7 +78,7 @@ except Exception:
     pass
 
 
-from text_preprocess.symbols import punctuation
+from .symbols import punctuation
 
 # Regular expression matching Japanese without punctuation marks:
 _japanese_characters = re.compile(

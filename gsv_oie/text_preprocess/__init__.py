@@ -1,10 +1,10 @@
 from typing import Any, Dict, List
-from runner_registry import set_g2pw_predict, set_roberta_predict
+from ..runner_registry import  set_g2pw_predict, set_roberta_predict
 import numpy as np
-import MNN
-import MNN.numpy as mnp
 
 def g2pw_predict(model_path:str, inputs:Dict[str, np.ndarray]) -> List[np.ndarray]:
+    import MNN
+    import MNN.numpy as mnp
     input_names = ['input_ids', 'token_type_ids', 'attention_mask', 'phoneme_mask', 'char_ids', 'position_ids']
     output_names = ['probs']
     # Initialize on first call
@@ -25,6 +25,8 @@ def g2pw_predict(model_path:str, inputs:Dict[str, np.ndarray]) -> List[np.ndarra
 set_g2pw_predict(g2pw_predict)
 
 def roberta_predict(model_path:str, inputs:Dict[str, np.ndarray]) -> List[np.ndarray]:
+    import MNN
+    import MNN.numpy as mnp
     input_names = ['input_ids']
     output_names = ['logits']
     if not hasattr(roberta_predict, 'mnn_model'):

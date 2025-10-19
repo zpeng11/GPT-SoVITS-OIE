@@ -8,9 +8,9 @@ jieba.setLogLevel(logging.CRITICAL)
 # 更改fast_langdetect大模型位置
 import fast_langdetect
 import os
-import runner_registry
+from ...runner_registry import get_models_dir
 
-CACHE_DIRECTORY = os.path.join(runner_registry.get_models_dir(),"fast_langdetect")
+CACHE_DIRECTORY = os.path.join(get_models_dir(),"fast_langdetect")
 fast_langdetect.infer._default_detector = fast_langdetect.infer.LangDetector(fast_langdetect.infer.LangDetectConfig(cache_dir=CACHE_DIRECTORY))
 
 

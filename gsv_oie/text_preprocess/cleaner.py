@@ -1,6 +1,6 @@
 import os
-from text_preprocess import symbols as symbols_v1
-from text_preprocess import symbols2 as symbols_v2
+from . import symbols as symbols_v1
+from . import symbols2 as symbols_v2
 
 special = [
     # ("%", "zh", "SP"),
@@ -26,7 +26,7 @@ def clean_text(text, language, version=None):
     for special_s, special_l, target_symbol in special:
         if special_s in text and language == special_l:
             return clean_special(text, language, special_s, target_symbol, version)
-    language_module = __import__("text_preprocess." + language_module_map[language], fromlist=[language_module_map[language]])
+    language_module = __import__("gsv_oie.text_preprocess." + language_module_map[language], fromlist=[language_module_map[language]])
     if hasattr(language_module, "text_normalize"):
         norm_text = language_module.text_normalize(text)
     else:

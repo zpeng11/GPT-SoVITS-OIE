@@ -4,8 +4,8 @@ import re
 import cn2an
 import ToJyutping
 
-from text_preprocess.symbols import punctuation
-from text_preprocess.zh_normalization.text_normlization import TextNormalizer
+from .symbols import punctuation
+from .zh_normalization.text_normlization import TextNormalizer
 
 normalizer = lambda x: cn2an.transform(x, "an2cn")
 
@@ -195,7 +195,7 @@ def get_jyutping(text):
 
 
 def get_bert_feature(text, word2ph):
-    from text_preprocess import chinese_bert
+    from . import chinese_bert
 
     return chinese_bert.get_bert_feature(text, word2ph)
 

@@ -1,0 +1,41 @@
+# Include documentation and root files
+include README.md
+include LICENSE
+include requirements.txt
+include EnvrionmentalVariablesToFill.md
+include MANIFEST.in
+include setup.py
+
+# Include everything in gsv_oie package directory EXCEPT pretrained_models
+recursive-include gsv_oie *
+recursive-exclude gsv_oie/pretrained_models *
+global-exclude gsv_oie/pretrained_models/*
+prune gsv_oie/pretrained_models
+
+# Additional explicit exclusions for pretrained_models files
+global-exclude gsv_oie/pretrained_models/**/*
+global-exclude gsv_oie/pretrained_models/G2PWModel/*
+global-exclude gsv_oie/pretrained_models/chinese-roberta-wwm-ext-large/*
+
+# Exclude large model files that should be downloaded separately
+global-exclude *.mnn
+global-exclude *.onnx
+global-exclude *.safetensors
+global-exclude *.pt
+global-exclude *.pth
+global-exclude *.ckpt
+
+# Exclude compiled and cache files
+global-exclude *.pyc
+global-exclude *.pyo
+global-exclude *.pyd
+global-exclude __pycache__
+global-exclude .git*
+global-exclude .DS_Store
+global-exclude *.so
+global-exclude *.dll
+global-exclude *.dylib
+global-exclude .pytest_cache
+global-exclude .mypy_cache
+global-exclude .coverage
+global-exclude *.egg-info

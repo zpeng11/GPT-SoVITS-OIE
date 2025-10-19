@@ -2,16 +2,16 @@ import pickle
 import os
 import re
 import wordsegment
-import runner_registry
-os.environ["NLTK_DATA"] = os.path.join(runner_registry.get_models_dir(),"nltk_data")
+from ..runner_registry import get_models_dir
+os.environ["NLTK_DATA"] = os.path.join(get_models_dir(),"nltk_data")
 from g2p_en import G2p
 
-from text_preprocess.symbols import punctuation
+from .symbols import punctuation
 
-from text_preprocess.symbols2 import symbols
+from .symbols2 import symbols
 
 from builtins import str as unicode
-from text_preprocess.en_normalization.expend import normalize
+from .en_normalization.expend import normalize
 from nltk.tokenize import TweetTokenizer
 
 word_tokenize = TweetTokenizer().tokenize

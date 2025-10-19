@@ -7,17 +7,17 @@ now_dir = os.getcwd()
 sys.path.append(now_dir)
 
 import re
-from text_preprocess.LangSegmenter import LangSegmenter
+from .LangSegmenter import LangSegmenter
 from typing import Dict, List, Tuple
-from text_preprocess.cleaner import clean_text
-from runner_registry import get_callback
+from .cleaner import clean_text
+from ..runner_registry import get_callback
 from tokenizers import Tokenizer
-from text_preprocess.text_segmentation_method import split_big_text, splits, get_method as get_seg_method
+from .text_segmentation_method import split_big_text, splits, get_method as get_seg_method
 import numpy as np
 punctuation = set(["!", "?", "…", ",", ".", "-"])
 
-from text_preprocess import symbols as symbols_v1
-from text_preprocess import symbols2 as symbols_v2
+from . import symbols as symbols_v1
+from . import symbols2 as symbols_v2
 
 _symbol_to_id_v1 = {s: i for i, s in enumerate(symbols_v1.symbols)}
 _symbol_to_id_v2 = {s: i for i, s in enumerate(symbols_v2.symbols)}
@@ -63,8 +63,8 @@ def merge_short_text_in_array(texts: str, threshold: int) -> list:
 
 class TextPreprocessor:
     def __init__(self):
-        import runner_registry
-        self.tokenizer = Tokenizer.from_file(os.path.join(runner_registry.get_models_dir(),"chinese-roberta-wwm-ext-large","tokenizer.json"))
+        from ..runner_registry import get_models_dir
+        self.tokenizer = Tokenizer.from_file(os.path.join(get_models_dir(),"chinese-roberta-wwm-ext-large","tokenizer.json"))
 
     def preprocess(self, text: str, lang: str, text_split_method: str, version: str = "v2") -> List[Dict]:
         print(f"############ 切分文本 ############")
@@ -183,7 +183,6 @@ class TextPreprocessor:
         norm_text_list = []
         for i in range(len(textlist)):
             lang = langlist[i]
-            print(f"处理片段: {textlist[i]} 语言: {lang}")
             phones, word2ph, norm_text = self.clean_text_inf(textlist[i], lang, version)
             bert = self.get_bert_inf(phones, word2ph, norm_text, lang)
             phones_list.append(phones)

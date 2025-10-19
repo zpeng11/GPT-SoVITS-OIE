@@ -1,1 +1,0 @@
-from text_preprocess.g2pw.g2pw import *
