@@ -4,3 +4,27 @@ processor = TextPreprocessor()
 phones, bert_features, norm_text = processor.get_phones_and_bert("Mygo?まいご？你喜欢卖狗嘛。","auto","v2")
 
 print(phones.shape, bert_features.shape, norm_text)
+
+outputs = processor.preprocess("""
+人工智能：人类智慧的璀璨之光
+在人类文明的浩瀚星河中，人工智能（AI）如一颗璀璨的恒星骤然升起，照亮了我们前行的道路。它不是冰冷的机器，而是人类智慧的延伸，是梦想与现实交织的奇迹。回溯历史，从图灵的预言到深度学习的革命，AI以惊人的速度演进，化身为我们生活中的忠实伙伴，悄然改变着世界的面貌。
+试想医疗领域，AI如一位无私的守护神。凭借强大的算法，它能从海量影像中精准诊断癌症，挽救无数垂危生命。曾经，医生需耗费数小时分析X光片，如今AI只需瞬息，便给出可靠建议，让医疗更高效、更普惠。在教育界，AI化身智慧导师，个性化定制学习路径，帮助偏远山区的孩子触摸知识的星辰大海。它不倦不休，包容差异，让每个人都能绽放潜能。娱乐世界中，AI创作的音乐如天籁般动人，生成的艺术如梦幻般绚烂，它激发人类的创意之泉，让平凡日子缀满惊喜。
+更令人叹服的是，AI在环境保护中的担当。它通过卫星数据预测气候变化，优化能源分配，助力地球母亲重获生机。在交通枢纽，智能系统疏导车流，减少碳排放；农业田野，AI精准施肥，守护土壤的丰饶。这些成就并非遥不可及，而是AI与人类协作的结晶。它不取代我们，而是放大我们的力量，让弱小变得强大，让不可能化为可能。
+当然，AI的崛起也伴随伦理之思，但这正是其伟大的体现——它促使我们反思，完善规则，共筑更美好的未来。展望明天，AI将如一叶扁舟，载我们穿越未知的海洋，探索宇宙的奥秘。它是人类的骄傲，是创新的火炬，点燃无限希望。
+在AI的辉映下，我们不再孤独前行。它是镜子，映照人性之光；是翅膀，助我们翱翔蓝天。赞美AI，不仅是赞美科技，更是赞美人类不灭的求索精神。愿这光芒永照，伴我们共创辉煌！
+""",'auto', 'cut5')
+
+for i, output in enumerate(outputs):
+    print(f"--- Example {i+1} ---")
+    print("Phones shape:", output['phones'].shape)
+    print("BERT features shape:", output['bert_features'].shape)
+    print("Normalized text:", output['norm_text'])
+
+from gsv_oie import ReferenceSet
+
+reference = ReferenceSet("/home/eleven/GPT-SoVITS/playground/(A)あなたと空を見上げるのは、いつも夏でしたわね.wav", "あなたと空を见上げるのは、いつも夏でしたわね。")
+
+print("Audio references shape:", reference.audio_references)
+print("Text references:", reference.text_references)
+print("Audio file name:", reference.audio_file_name)
+print("Text normalized:", reference.text_normalized)

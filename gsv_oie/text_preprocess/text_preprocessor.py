@@ -8,7 +8,7 @@ sys.path.append(now_dir)
 
 import re
 from .LangSegmenter import LangSegmenter
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Any
 from .cleaner import clean_text
 from ..runner_registry import get_callback
 from tokenizers import Tokenizer
@@ -65,6 +65,9 @@ class TextPreprocessor:
     def __init__(self):
         from ..runner_registry import get_models_dir
         self.tokenizer = Tokenizer.from_file(os.path.join(get_models_dir(),"chinese-roberta-wwm-ext-large","tokenizer.json"))
+
+    def __call__(self, text: str, language: str = 'auto', version: str = "v2") -> List[Any]:
+        return self.get_phones_and_bert(text, language, version)
 
     def preprocess(self, text: str, lang: str, text_split_method: str, version: str = "v2") -> List[Dict]:
         print(f"############ 切分文本 ############")

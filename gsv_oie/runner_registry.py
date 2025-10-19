@@ -37,3 +37,9 @@ def set_roberta_predict(func:Callable[[str, Dict[str, np.ndarray]], List[np.ndar
     def wrapper(inputs):
         return func(ROBERTA_MODEL_PATH, inputs)
     register_callback('roberta_predict', wrapper)
+
+def set_audio_preprocess_predict(func:Callable[[str, Dict[str, np.ndarray]], List[np.ndarray]]):
+    AUDIO_PREPROCESS_MODEL_PATH = os.path.join(get_models_dir(),"audio-preprocess", "audio-preprocess.mnn")
+    def wrapper(inputs):
+        return func(AUDIO_PREPROCESS_MODEL_PATH, inputs)
+    register_callback('audio_preprocess_predict', wrapper)
