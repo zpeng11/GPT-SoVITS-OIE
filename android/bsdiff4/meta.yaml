@@ -1,0 +1,13 @@
+package:
+  name: bsdiff4
+  version: "1.2.6"
+
+source:
+  git_url: https://github.com/ilanschnell/bsdiff4.git
+  git_rev: b9d2bbfb6d84e74506f09462bd1a2a1d2cdfc161
+
+requirements:
+  build:
+    - pybind11 2.10.0
+  host:
+    - python

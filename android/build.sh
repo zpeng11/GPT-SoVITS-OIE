@@ -7,6 +7,7 @@ conda activate py310
 
 cp -r /app/gsv_oie_android/android/pyopenjtalk /app/chaquopy/server/pypi/packages/pyopenjtalk
 cp -r /app/gsv_oie_android/android/fasttext-predict /app/chaquopy/server/pypi/packages/fasttext-predict
+cp -r /app/gsv_oie_android/android/bsdiff4 /app/chaquopy/server/pypi/packages/bsdiff4
 
 cd /app/chaquopy/server/pypi
 # conda activate py39
@@ -23,6 +24,7 @@ conda activate py310
 # ./build-wheel.py --python 3.10 --abi armeabi-v7a fasttext-predict
 ./build-wheel.py --python 3.10 --abi arm64-v8a pyopenjtalk
 ./build-wheel.py --python 3.10 --abi arm64-v8a fasttext-predict
+./build-wheel.py --python 3.10 --abi arm64-v8a bsdiff4
 # ./build-wheel.py --python 3.10 --abi x86 pyopenjtalk
 # ./build-wheel.py --python 3.10 --abi x86 fasttext-predict
 # ./build-wheel.py --python 3.10 --abi x86_64 pyopenjtalk
@@ -40,4 +42,5 @@ conda activate py310
 mkdir -p /app/gsv_oie_android/android/build
 cp /app/chaquopy/server/pypi/dist/pyopenjtalk/* /app/gsv_oie_android/android/build/
 cp /app/chaquopy/server/pypi/dist/fasttext-predict/* /app/gsv_oie_android/android/build/
+cp /app/chaquopy/server/pypi/dist/bsdiff4/* /app/gsv_oie_android/android/build/
 chmod -R a+r+w /app/gsv_oie_android/android/build
