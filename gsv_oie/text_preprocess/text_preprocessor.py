@@ -66,7 +66,9 @@ class TextPreprocessor:
         from ..runner_registry import get_models_dir
         self.tokenizer = Tokenizer.from_file(os.path.join(get_models_dir(),"chinese-roberta-wwm-ext-large","tokenizer.json"))
 
-    def __call__(self, text: str, language: str = 'auto', version: str = "v2") -> List[Any]:
+    def __call__(self, text: str, language: str = 'auto', version: str = "v2", text_split_method: str = None) -> List[Any]:
+        if text_split_method is not None:
+            return self.preprocess(text, language, text_split_method, version)
         return self.get_phones_and_bert(text, language, version)
 
     def preprocess(self, text: str, lang: str, text_split_method: str, version: str = "v2") -> List[Dict]:

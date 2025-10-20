@@ -14,6 +14,7 @@ __email__ = ''
 from .text_preprocess.text_preprocessor import TextPreprocessor
 from .audio_preprocess.audo_preprocess import AudioPreprocessor
 from .gsv_runtime.reference import ReferenceSet
+from .gsv_runtime import GSVRuntime
 from .runner_registry import set_g2pw_predict, set_roberta_predict, set_audio_preprocess_predict
 
 # Expose only the public API
@@ -21,6 +22,7 @@ __all__ = [
     'TextPreprocessor',
     'AudioPreprocessor',
     'ReferenceSet',
+    'GSVRuntime',
     'set_g2pw_predict',
     'set_roberta_predict',
     'set_audio_preprocess_predict',

@@ -6,7 +6,7 @@ class ReferenceSet:
     def __init__(self, *args):
         """
         Initialize ReferenceSet with one of three patterns:
-        1. ReferenceSet(audio_references, text_references, audio_file_name, text_normalized)
+        1. ReferenceSet(audio_references, text_references, audio_file_name, ref_text)
         2. ReferenceSet(audio_path, text)
         3. ReferenceSet(audio_array, sample_rate, audio_file_name, text)
         """
@@ -20,7 +20,7 @@ class ReferenceSet:
             self.audio_references = args[0]
             self.text_references = args[1]
             self.audio_file_name = args[2]
-            self.text_normalized = args[3]
+            self.ref_text = args[3]
             return
 
         # Pattern 2: Audio file path and text
@@ -38,7 +38,7 @@ class ReferenceSet:
             text_outputs = text_preprocessor(text)
             self.text_references = text_outputs[:-1]
             self.audio_file_name = os.path.basename(audio_path)
-            self.text_normalized = text_outputs[-1]
+            self.ref_text = text_outputs[-1]
             return
 
         # Pattern 3: Audio array, sample rate, file name and text
@@ -56,11 +56,32 @@ class ReferenceSet:
             text_outputs = text_preprocessor(text)
             self.text_references = text_outputs[:-1]
             self.audio_file_name = os.path.basename(audio_file_name)
-            self.text_normalized = text_outputs[-1]
+            self.ref_text = text_outputs[-1]
             return
 
         else:
             raise ValueError("Invalid arguments. Expected one of:\n"
-                           "1. ReferenceSet(audio_references, text_references, audio_file_name, text_normalized)\n"
+                           "1. ReferenceSet(audio_references, text_references, audio_file_name, ref_text)\n"
                            "2. ReferenceSet(audio_path, text)\n"
                            "3. ReferenceSet(audio_array, sample_rate, audio_file_name, text)")
+    def __repr__(self):
+        return (f"ReferenceSet(audio_references_shape={[ar.shape for ar in self.audio_references]}, "
+                f"text_references_shape={[tr.shape for tr in self.text_references]}, "
+                f"audio_file_name='{self.audio_file_name}', "
+                f"ref_text={self.ref_text})")
+    
+    def to_dict(self) -> dict:
+        """
+        Convert ReferenceSet to a dictionary.
+
+        Returns:
+            dict: Dictionary representation of the ReferenceSet
+        """
+        dict_ = {}
+        dict_['hubert_ssl_output'] = self.audio_references[0]
+        dict_['spectrum'] = self.audio_references[1]
+        if len(self.audio_references) > 2:
+            dict_['sv_emb'] = self.audio_references[2]
+        dict_['phones'] = self.text_references[0]
+        dict_['bert_features'] = self.text_references[1]
+        return dict_
