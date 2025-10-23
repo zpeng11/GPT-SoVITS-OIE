@@ -17,15 +17,74 @@ import bsdiff4
 from tqdm import tqdm
 
 # Try to import the compiled C++ module
-# try:
-#     from .gsv_engine import GSVEngine as _GSVEngine
-# except ImportError as e:
-#     raise ImportError(
-#         f"Failed to import the GSV engine C++ module: {e}\n"
-#         "Please ensure the gsv_engine module has been compiled and is in the correct location."
-#     )
+try:
+    from .gsv_engine import GSVEngine as _GSVEngine
+    from .gsv_engine import MNNInferenceEngine, MNNInferenceEngineInterpreter
+except ImportError as e:
+    raise ImportError(
+        f"Failed to import the GSV engine C++ module: {e}\n"
+        "Please ensure the gsv_engine module has been compiled and is in the correct location."
+    )
 
 from .reference import ReferenceSet
+from gsv_oie.runner_registry import set_audio_preprocess_predict, set_g2pw_predict, set_roberta_predict
+
+
+def g2pw_predict(model_path:str, inputs:Dict[str, np.ndarray]) -> List[np.ndarray]:
+    input_names = ['input_ids', 'token_type_ids', 'attention_mask', 'phoneme_mask', 'char_ids', 'position_ids']
+    output_names = ['probs']
+    if not hasattr(g2pw_predict, 'mnn_engine'):
+        g2pw_predict.mnn_engine = MNNInferenceEngine(model_path, input_names, output_names)
+        print("Initialized g2pw MNN engine.")
+    inputs_list = []
+    for name in input_names:
+        value = inputs[name]
+        if value.dtype == np.int64:
+            value = value.astype(np.int32)
+        inputs_list.append(value)
+    return g2pw_predict.mnn_engine.infer(inputs_list)
+
+def g2pw_predict_python(model_path:str, inputs:Dict[str, np.ndarray]) -> List[np.ndarray]:
+    import MNN
+    import MNN.numpy as mnp
+    input_names = ['input_ids', 'token_type_ids', 'attention_mask', 'phoneme_mask', 'char_ids', 'position_ids']
+    output_names = ['probs']
+    # Initialize on first call
+    if not hasattr(g2pw_predict_python, 'mnn_model'):
+        g2pw_predict_python.mnn_model = MNN.nn.load_module_from_file(model_path, input_names, output_names)
+        print("Initialized g2pw MNN model.")
+
+    mnn_inputs = []
+    for name in input_names:
+        value = inputs[name]
+        if value.dtype == np.int64:
+            value = value.astype(np.int32)
+        mnn_inputs.append(mnp.array(value))
+    mnn_outputs = g2pw_predict_python.mnn_model(mnn_inputs)
+
+    return [mnn_output.read() for mnn_output in mnn_outputs]
+
+def g2pw_predict_interpreter(model_path:str, inputs:Dict[str, np.ndarray]) -> List[np.ndarray]:
+    output_names = ['probs']
+    if not hasattr(g2pw_predict_interpreter, 'mnn_engine'):
+        g2pw_predict_interpreter.mnn_engine = MNNInferenceEngineInterpreter(model_path)
+        print("Initialized g2pw MNN engine.")
+    for name in inputs:
+        value = inputs[name]
+        if value.dtype == np.int64:
+            value = value.astype(np.int32)
+    outputs = g2pw_predict_interpreter.mnn_engine.infer(inputs)
+    output = [outputs[name] for name in output_names]
+
+    old_output = g2pw_predict(model_path, inputs)
+    for module_out, interp_out in zip(old_output, output):
+        assert np.allclose(module_out, interp_out, atol=1e-5), "Outputs from module and interpreter do not match!"
+    python_out = g2pw_predict_python(model_path, inputs)
+    for module_out, py_out in zip(old_output, python_out):
+        assert np.allclose(module_out, py_out, atol=1e-5), "Outputs from module and python API do not match!"
+    return output
+
+set_g2pw_predict(g2pw_predict_interpreter)
 
 class GSVRuntime:
     """
@@ -40,7 +99,9 @@ class GSVRuntime:
         Initialize the GSV Runtime engine.
 
         Args:
-            gsv_settings: Set of configuration settings for the engine
+            gsv_file: Path to the GSV model file (.gsv)
+            use_gpu: Whether to use GPU acceleration
+            use_npu: Whether to use NPU acceleration
         """
         if not os.path.isfile(gsv_file):
             raise ValueError(f"GSV file '{gsv_file}' does not exist.")
@@ -79,6 +140,16 @@ class GSVRuntime:
         self.sdec_path = os.path.join(temp_dir, 't2s', 't2s_sdec_quant.onnx') if not self.is_quantized else os.path.join(temp_dir, 't2s', 't2s_sdec.onnx')
         self.sovits_path = os.path.join(temp_dir, 'sovits', 'sovits_v1v2.mnn')
 
+        # Initialize the C++ engine
+        self.engine = _GSVEngine(
+            self.fsdec_path,
+            self.sdec_path,
+            self.sovits_path,
+            self.use_gpu,
+            self.use_npu,
+            self.is_quantized
+        )
+
         from gsv_oie import TextPreprocessor
         self.text_preprocessor = TextPreprocessor()
 
@@ -90,7 +161,7 @@ class GSVRuntime:
             ReferenceSet: The reference audio and text data
         """
         return self.reference_set
-    
+
     def set_reference_set(self, reference_set: ReferenceSet) -> None:
         """
         Set a new reference set for the GSV engine.
@@ -107,7 +178,16 @@ class GSVRuntime:
         Args:
             use_gpu: Whether to use GPU acceleration
         """
-        self.engine.set_use_gpu(use_gpu)
+        if self.use_gpu != use_gpu:
+            self.use_gpu = use_gpu
+            self.engine = _GSVEngine(
+                self.fsdec_path,
+                self.sdec_path,
+                self.sovits_path,
+                self.use_gpu,
+                self.use_npu,
+                self.is_quantized
+            )
 
     def set_use_npu(self, use_npu: bool) -> None:
         """
@@ -116,20 +196,35 @@ class GSVRuntime:
         Args:
             use_npu: Whether to use NPU acceleration
         """
-        self.engine.set_use_npu(use_npu)
+        if self.use_npu != use_npu:
+            self.use_npu = use_npu
+            self.engine = _GSVEngine(
+                self.fsdec_path,
+                self.sdec_path,
+                self.sovits_path,
+                self.use_gpu,
+                self.use_npu,
+                self.is_quantized
+            )
 
-    def infer(self, text_input:str, 
-              language: str = 'auto', 
-              text_split_method: str = None, 
-              output_audio_interval: float = 0.0, 
-              top_k: int = 15, 
-              temperature: float = 1.0, 
+    def infer(self, text_input:str,
+              language: str = 'auto',
+              text_split_method: str = None,
+              output_audio_interval: float = 0.0,
+              top_k: int = 15,
+              temperature: float = 1.0,
               repeat_penalty: float = 1.35) -> np.ndarray:
         """
         Run inference with the GSV engine.
 
         Args:
             text_input: The text input for the inference
+            language: Language of the input text
+            text_split_method: Method for splitting text
+            output_audio_interval: Interval for audio output
+            top_k: Top-k sampling parameter
+            temperature: Temperature for sampling
+            repeat_penalty: Repeat penalty for sampling
 
         Returns:
             numpy.ndarray: The inference result as a numpy array
@@ -147,14 +242,21 @@ class GSVRuntime:
             processed_texts = self.text_preprocessor.preprocess(text_input, lang=language, text_split_method=text_split_method)
         for processed_text in tqdm(processed_texts):
             if isinstance(processed_text, list):
-                text_input = {
+                text_input_dict = {
                     'phones': processed_text[0],
                     'bert_features': processed_text[1],
                     'norm_text': processed_text[2]
                 }
             else:
-                text_input = processed_text
-            result_audios.append(self.engine.infer(self.reference_set.to_dict(), text_input, sampling_params))
+                text_input_dict = processed_text
+            ref_set_dict = self.reference_set.to_dict()
+            for key, value in ref_set_dict.items():
+                if value.dtype == np.int64:
+                    ref_set_dict[key] = value.astype(np.int32)
+            for key, value in text_input_dict.items():
+                if isinstance(value, np.ndarray) and value.dtype == np.int64:
+                    text_input_dict[key] = value.astype(np.int32)
+            result_audios.append(self.engine.infer(ref_set_dict, text_input_dict, sampling_params))
             if output_audio_interval > 0.0:
                 interval_samples = int(output_audio_interval * 32000)
                 result_audios.append(np.zeros((interval_samples,), dtype=np.float32))

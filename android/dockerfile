@@ -85,6 +85,8 @@ SHELL ["/bin/bash", "-c"]
 RUN /bin/bash -c "yes | sdkmanager --licenses && \
     yes | sdkmanager --install 'ndk;27.3.13750724'"
 
+ENV ANDROID_NDK="/opt/android-sdk-linux/ndk/27.3.13750724"
+
 # 设置工作目录
 WORKDIR /app
 

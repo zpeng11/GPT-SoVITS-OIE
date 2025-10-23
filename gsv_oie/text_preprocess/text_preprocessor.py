@@ -200,7 +200,7 @@ class TextPreprocessor:
         if not final and len(phones) < 6:
             return self.get_phones_and_bert("." + text, language, version, final=True)
 
-        return phones, bert, norm_text
+        return np.expand_dims(phones, axis=0), bert.T, norm_text
 
     def get_bert_feature(self, text: str, word2ph: list) -> list:
         inputs = np.array([self.tokenizer.encode(text).ids]).astype(np.int64)
