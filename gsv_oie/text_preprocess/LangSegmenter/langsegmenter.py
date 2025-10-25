@@ -2,7 +2,7 @@ import logging
 import re
 
 # jieba静音
-import jieba
+import jieba_fast as jieba
 jieba.setLogLevel(logging.CRITICAL)
 
 # 更改fast_langdetect大模型位置

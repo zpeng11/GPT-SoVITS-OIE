@@ -9,6 +9,7 @@ cp -r /app/gsv_oie_android/android/pyopenjtalk /app/chaquopy/server/pypi/package
 cp -r /app/gsv_oie_android/android/fasttext-predict /app/chaquopy/server/pypi/packages
 cp -r /app/gsv_oie_android/android/bsdiff4 /app/chaquopy/server/pypi/packages
 cp -r /app/gsv_oie_android/android/soundfile /app/chaquopy/server/pypi/packages
+cp -r /app/gsv_oie_android/android/jieba-fast /app/chaquopy/server/pypi/packages
 
 cd /app/chaquopy/server/pypi
 conda activate py310
@@ -18,16 +19,8 @@ conda activate py310
 ./build-wheel.py --python 3.10 --abi arm64-v8a --api-level 21 bsdiff4
 ./build-wheel.py --python 3.10 --abi arm64-v8a --api-level 21 numpy
 ./build-wheel.py --python 3.10 --abi arm64-v8a --api-level 21 soundfile
+./build-wheel.py --python 3.10 --abi arm64-v8a --api-level 21 jieba-fast
 
-mkdir -p /app/gsv_oie_android/android/build
-cp /app/chaquopy/server/pypi/dist/pyopenjtalk/* /app/gsv_oie_android/android/build/
-cp /app/chaquopy/server/pypi/dist/fasttext-predict/* /app/gsv_oie_android/android/build/
-cp /app/chaquopy/server/pypi/dist/bsdiff4/* /app/gsv_oie_android/android/build/
-cp /app/chaquopy/server/pypi/dist/chaquopy-libogg/* /app/gsv_oie_android/android/build/
-cp /app/chaquopy/server/pypi/dist/chaquopy-libvorbis/* /app/gsv_oie_android/android/build/
-cp /app/chaquopy/server/pypi/dist/chaquopy-libsndfile/* /app/gsv_oie_android/android/build/
-cp /app/chaquopy/server/pypi/dist/chaquopy-flac/* /app/gsv_oie_android/android/build/
-cp /app/chaquopy/server/pypi/dist/soundfile/* /app/gsv_oie_android/android/build/
-cp /app/chaquopy/server/pypi/dist/chaquopy-openblas/* /app/gsv_oie_android/android/build/
-cp /app/chaquopy/server/pypi/dist/numpy/* /app/gsv_oie_android/android/build/
-chmod -R a+r+w /app/gsv_oie_android/android/build
+mkdir -p /app/gsv_oie_android/android/dist
+find /app/chaquopy/server/pypi/dist -name "*.whl" -exec cp {} /app/gsv_oie_android/android/dist/ \;
+chmod -R a+r+w /app/gsv_oie_android/android/dist

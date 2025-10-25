@@ -9,8 +9,6 @@ from pypinyin.seg.simpleseg import simple_seg
 from pypinyin.converter import UltimateConverter
 from pypinyin.contrib.tone_convert import to_tone
 from .onnx_api import G2PWOnnxConverter
-import zipfile
-import requests
 
 current_file_path = os.path.dirname(__file__)
 CACHE_PATH = os.path.join(current_file_path, "polyphonic.pickle")
@@ -87,38 +85,6 @@ class Converter(UltimateConverter):
                 pinyins.append([to_tone(item)])
 
         return pinyins
-
-def download_and_decompress(model_dir: str = "pretrained_models/G2PWModel/"):
-    if not os.path.exists(model_dir):
-        parent_directory = os.path.dirname(model_dir)
-        zip_dir = os.path.join(parent_directory, "G2PWModel_1.1.zip")
-        extract_dir = os.path.join(parent_directory, "G2PWModel_1.1")
-        extract_dir_new = os.path.join(parent_directory, "G2PWModel")
-        print("Downloading g2pw model...")
-        modelscope_url = "https://www.modelscope.cn/models/kamiorinn/g2pw/resolve/master/G2PWModel_1.1.zip"  # "https://paddlespeech.cdn.bcebos.com/Parakeet/released_models/g2p/G2PWModel_1.1.zip"
-        with requests.get(modelscope_url, stream=True) as r:
-            r.raise_for_status()
-            with open(zip_dir, "wb") as f:
-                for chunk in r.iter_content(chunk_size=8192):
-                    if chunk:
-                        f.write(chunk)
-
-        print("Extracting g2pw model...")
-        with zipfile.ZipFile(zip_dir, "r") as zip_ref:
-            zip_ref.extractall(parent_directory)
-
-        os.rename(extract_dir, extract_dir_new)
-
-        print("Downloading tokenizer.json...")
-        tokenizer_json_url = 'https://huggingface.co/hfl/chinese-roberta-wwm-ext/resolve/main/tokenizer.json'
-        with requests.get(tokenizer_json_url, stream=True) as r:
-            r.raise_for_status()
-            with open(os.path.join(extract_dir_new, "tokenizer.json"), "wb") as f:
-                for chunk in r.iter_content(chunk_size=8192):
-                    if chunk:
-                        f.write(chunk)
-
-    return model_dir
 
 def _remove_dup_items(lst, remove_empty=False):
     new_lst = []
