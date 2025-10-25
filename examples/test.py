@@ -1,3 +1,10 @@
+from gsv_oie import TextPreprocessor
+
+text_preprocessor = TextPreprocessor()
+result = text_preprocessor.get_phones_and_bert('人工智能：人类智慧的璀璨之光', 'auto','v2')
+print(result)
+
+exit()
 from gsv_oie import GSVRuntime
 
 gsv_runtime = GSVRuntime('/home/eleven/GPT-SoVITS-export/onnx/v2.gsv')

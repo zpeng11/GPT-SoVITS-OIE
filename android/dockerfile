@@ -22,7 +22,9 @@ RUN apt-get update && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*  # 清理缓存
 
-RUN git clone https://github.com/chaquo/chaquopy.git /app/chaquopy
+RUN git clone https://github.com/chaquo/chaquopy.git /app/chaquopy &&\
+    cd /app/chaquopy &&\
+    git checkout 1ccebbe58016a9cad2d31e565464b36c19495337
 
 # 下载并安装 Miniconda
 RUN wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh && \
@@ -35,9 +37,7 @@ ENV PATH="/opt/miniconda3/bin:$PATH"
 RUN conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/main
 RUN conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r
 RUN conda init bash && \
-    /opt/miniconda3/bin/conda create -n py310 python=3.10 -y &&\
-    /opt/miniconda3/bin/conda create -n py39 python=3.9 -y &&\
-    /opt/miniconda3/bin/conda create -n py311 python=3.11 -y
+    /opt/miniconda3/bin/conda create -n py310 python=3.10 -y
 
 # 默认激活
 RUN echo 'conda activate py310' >> ~/.bashrc
@@ -55,37 +55,29 @@ RUN /bin/bash -c "source /opt/miniconda3/etc/profile.d/conda.sh && \
     cd /app/chaquopy && \
     ./target/download-target.sh maven/com/chaquo/python/target/3.10.6-1"
 
-# RUN conda init bash && \
-#     /opt/miniconda3/bin/conda create -n py39 python=3.9 -y &&\
-#     /opt/miniconda3/bin/conda create -n py311 python=3.11 -y
-
-# SHELL ["/bin/bash", "-c"]
-# RUN /bin/bash -c "source /opt/miniconda3/etc/profile.d/conda.sh && \
-#     conda activate py39 && \
-#     python --version && \
-#     pip install --upgrade pip setuptools wheel && \
-#     pip install -r /app/chaquopy/server/pypi/requirements.txt &&\
-#     pip install numpy==1.25.0 &&\
-#     pip install setuptools_scm==8.1.0 &&\
-#     cd /app/chaquopy && \
-#     ./target/download-target.sh maven/com/chaquo/python/target/3.9.20-1"
-
-# SHELL ["/bin/bash", "-c"]
-# RUN /bin/bash -c "source /opt/miniconda3/etc/profile.d/conda.sh && \
-#     conda activate py311 && \
-#     python --version && \
-#     pip install --upgrade pip setuptools wheel && \
-#     pip install -r /app/chaquopy/server/pypi/requirements.txt &&\
-#     pip install numpy==1.25.0 &&\
-#     pip install setuptools_scm==8.1.0 &&\
-#     cd /app/chaquopy && \
-#     ./target/download-target.sh maven/com/chaquo/python/target/3.11.6-0"
-
 SHELL ["/bin/bash", "-c"]
 RUN /bin/bash -c "yes | sdkmanager --licenses && \
     yes | sdkmanager --install 'ndk;27.3.13750724'"
 
 ENV ANDROID_NDK="/opt/android-sdk-linux/ndk/27.3.13750724"
+
+RUN mkdir -p /app/chaquopy/server/pypi/dist/chaquopy-openblas
+RUN wget -O /app/chaquopy/server/pypi/dist/chaquopy-openblas/chaquopy_openblas-0.2.20-5-py3-none-android_21_arm64_v8a.whl https://chaquo.com/pypi-13.1/chaquopy-openblas/chaquopy_openblas-0.2.20-5-py3-none-android_21_arm64_v8a.whl
+
+RUN mkdir -p /app/chaquopy/server/pypi/dist/libgfortran
+RUN wget -O /app/chaquopy/server/pypi/dist/libgfortran/chaquopy_libgfortran-4.9-0-py3-none-android_21_arm64_v8a.whl https://chaquo.com/pypi-13.1/chaquopy-libgfortran/chaquopy_libgfortran-4.9-0-py3-none-android_21_arm64_v8a.whl
+
+RUN mkdir -p /app/chaquopy/server/pypi/dist/chaquopy-libogg
+RUN wget -O /app/chaquopy/server/pypi/dist/chaquopy-libogg/chaquopy_libogg-1.3.4-0-py3-none-android_21_arm64_v8a.whl https://chaquo.com/pypi-13.1/chaquopy-libogg/chaquopy_libogg-1.3.4-0-py3-none-android_21_arm64_v8a.whl
+
+RUN mkdir -p /app/chaquopy/server/pypi/dist/chaquopy-libvorbis
+RUN wget -O /app/chaquopy/server/pypi/dist/chaquopy-libvorbis/chaquopy_libvorbis-1.3.7-0-py3-none-android_21_arm64_v8a.whl https://chaquo.com/pypi-13.1/chaquopy-libvorbis/chaquopy_libvorbis-1.3.7-0-py3-none-android_21_arm64_v8a.whl
+
+RUN mkdir -p /app/chaquopy/server/pypi/dist/chaquopy-flac
+RUN wget -O /app/chaquopy/server/pypi/dist/chaquopy-flac/chaquopy_flac-1.3.3-0-py3-none-android_21_arm64_v8a.whl https://chaquo.com/pypi-13.1/chaquopy-flac/chaquopy_flac-1.3.3-0-py3-none-android_21_arm64_v8a.whl
+
+RUN mkdir -p /app/chaquopy/server/pypi/dist/chaquopy-libsndfile
+RUN wget -O /app/chaquopy/server/pypi/dist/chaquopy-libsndfile/chaquopy_libsndfile-1.0.28-0-py3-none-android_21_arm64_v8a.whl https://chaquo.com/pypi-13.1/chaquopy-libsndfile/chaquopy_libsndfile-1.0.28-0-py3-none-android_21_arm64_v8a.whl
 
 # 设置工作目录
 WORKDIR /app
