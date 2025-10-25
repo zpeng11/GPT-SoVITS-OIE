@@ -77,16 +77,6 @@ def get_include_dirs():
     ]
     return include_dirs
 
-def get_library_dirs():
-    """Get library directories for the C++ extension."""
-    # Only use local libraries, don't search for external ones
-    return []
-
-def get_libraries():
-    """Get libraries to link against."""
-    # Only link against system libraries that are always available
-    return []
-
 def get_gsv_engine_ext():
     from pybind11.setup_helpers import Pybind11Extension
     # Define the C++ extension
@@ -96,8 +86,8 @@ def get_gsv_engine_ext():
             "gsv_oie/gsv_runtime/src/gsv_engine.cpp",
         ],
         include_dirs=get_include_dirs(),
-        library_dirs=get_library_dirs(),
-        libraries=get_libraries(),
+        library_dirs=[],
+        libraries=[],
         cxx_std=17,
         define_macros=[("VERSION_INFO", '"dev"')],
         extra_compile_args=["-O3", "-Wall", "-shared", "-std=c++17"],
@@ -110,8 +100,8 @@ def get_gsv_engine_ext():
             "gsv_oie/text_preprocess/tokenizers.cpp",
         ],
         include_dirs=get_include_dirs(),
-        library_dirs=get_library_dirs(),
-        libraries=get_libraries(),
+        library_dirs=[],
+        libraries=[],
         cxx_std=17,
         define_macros=[("VERSION_INFO", '"dev"')],
         extra_compile_args=["-O3", "-Wall", "-shared", "-std=c++17"],

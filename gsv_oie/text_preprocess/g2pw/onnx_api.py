@@ -8,7 +8,6 @@ import warnings
 from typing import Any, Dict, List, Tuple
 from opencc import OpenCC
 from pypinyin import Style, pinyin
-from tokenizers import Tokenizer
 
 from ..zh_normalization.char_convert import tranditional_to_simplified
 from .dataset import get_char_phoneme_labels, get_phoneme_labels, prepare_onnx_input
@@ -23,7 +22,8 @@ from gsv_oie.runner_registry import get_callback
 
 from typing import List
 from typing import Tuple
-
+from pathlib import Path
+from ..tokenizers_cpp import TokenizerCPP
 
 def g2pw_predict(onnx_input: Dict[str, Any], labels: List[str]) -> Tuple[List[str], List[float]]:
     all_preds = []
@@ -60,7 +60,8 @@ class G2PWOnnxConverter:
 
         self.enable_opencc = enable_non_tradional_chinese
 
-        self.tokenizer = Tokenizer.from_file(tokenizer_source)
+        content = Path(tokenizer_source).read_text()
+        self.tokenizer = TokenizerCPP.FromBlobJSON(content)
 
         polyphonic_chars_path = os.path.join(model_dir, "POLYPHONIC_CHARS.txt")
         monophonic_chars_path = os.path.join(model_dir, "MONOPHONIC_CHARS.txt")

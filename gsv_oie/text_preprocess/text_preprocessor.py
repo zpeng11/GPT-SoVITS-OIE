@@ -11,7 +11,8 @@ from .LangSegmenter import LangSegmenter
 from typing import Dict, List, Tuple, Any
 from .cleaner import clean_text
 from ..runner_registry import get_callback
-from tokenizers import Tokenizer
+from .tokenizers_cpp import TokenizerCPP
+from pathlib import Path
 from .text_segmentation_method import split_big_text, splits, get_method as get_seg_method
 import numpy as np
 punctuation = set(["!", "?", "…", ",", ".", "-"])
@@ -64,7 +65,8 @@ def merge_short_text_in_array(texts: str, threshold: int) -> list:
 class TextPreprocessor:
     def __init__(self):
         from ..runner_registry import get_models_dir
-        self.tokenizer = Tokenizer.from_file(os.path.join(get_models_dir(),"chinese-roberta-wwm-ext-large","tokenizer.json"))
+        content = Path(os.path.join(get_models_dir(),"chinese-roberta-wwm-ext-large","tokenizer.json")).read_text()
+        self.tokenizer = TokenizerCPP.FromBlobJSON(content)
 
     def __call__(self, text: str, language: str = 'auto', version: str = "v2", text_split_method: str = None) -> List[Any]:
         if text_split_method is not None:
@@ -203,7 +205,7 @@ class TextPreprocessor:
         return np.expand_dims(phones, axis=0), bert.T, norm_text
 
     def get_bert_feature(self, text: str, word2ph: list) -> list:
-        inputs = np.array([self.tokenizer.encode(text).ids]).astype(np.int64)
+        inputs = np.array([[self.tokenizer.TokenToId("[CLS]")] + self.tokenizer.Encode(text) + [self.tokenizer.TokenToId("[SEP]")]]).astype(np.int64)
         res = get_callback("roberta_predict")({"input_ids":inputs})[0]
         assert len(word2ph) == len(text)
         phone_level_feature = []

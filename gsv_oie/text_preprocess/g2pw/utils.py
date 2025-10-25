@@ -61,7 +61,7 @@ def tokenize_and_map(tokenizer, text: str):
     tokens = []
     index_map_from_token_to_text = []
     for word, (word_start, word_end) in zip(words, word2text):
-        word_tokens = tokenizer.encode(word).tokens[1:-1]  # Remove [CLS] and [SEP] tokens
+        word_tokens =  [tokenizer.Decode(tokenizer.Encode(word))]  # Remove [CLS] and [SEP] tokens
 
         if len(word_tokens) == 0 or word_tokens == ["[UNK]"]:
             index_map_from_token_to_text.append((word_start, word_end))

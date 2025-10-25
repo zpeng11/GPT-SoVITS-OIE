@@ -63,7 +63,7 @@ def prepare_onnx_input(
 
         processed_tokens = ["[CLS]"] + tokens + ["[SEP]"]
 
-        input_id = [tokenizer.token_to_id(token) for token in processed_tokens]
+        input_id = [tokenizer.TokenToId(token) for token in processed_tokens]
         token_type_id = [0] * len(processed_tokens)
         attention_mask = [1] * len(processed_tokens)
 
