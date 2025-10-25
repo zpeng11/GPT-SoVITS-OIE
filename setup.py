@@ -10,6 +10,7 @@ supporting Chinese, English, Japanese, Korean, and Cantonese languages.
 import os
 import sys
 import subprocess
+import glob
 from setuptools import setup, find_packages, Extension
 from distutils.errors import CompileError
 import re
@@ -83,7 +84,7 @@ def get_gsv_engine_ext():
     gsv_engine_ext = Pybind11Extension(
         "gsv_oie.gsv_runtime.gsv_engine",
         sources=[
-            "gsv_oie/gsv_runtime/src/gsv_engine.cpp",
+            "gsv_oie/gsv_runtime/gsv_engine.cpp",
         ],
         include_dirs=get_include_dirs(),
         library_dirs=[],
@@ -190,19 +191,86 @@ def get_build_ext():
                 print(f"Tokenizers CMake lib built at: {lib_path}")
 
         def prebuild_onnxruntime(self):
-            # 如果需要，可以在这里添加预构建 ONNX Runtime 的逻辑
-            pass
+            import requests
+            import tarfile
+            import tempfile
+            import shutil
+
+            # URL for ONNX Runtime Linux x64 package
+            url = "https://github.com/microsoft/onnxruntime/releases/download/v1.23.1/onnxruntime-linux-x64-1.23.1.tgz"
+
+            # Target directory in extern/onnxruntime
+            self.onnxruntime_target_dir = os.path.join(os.path.dirname(__file__), 'extern', 'onnxruntime')
+
+            # Remove existing directory if it exists
+            if os.path.exists(self.onnxruntime_target_dir):
+                shutil.rmtree(self.onnxruntime_target_dir)
+
+            # Create parent directory if it doesn't exist
+            os.makedirs(os.path.dirname(self.onnxruntime_target_dir), exist_ok=True)
+
+            print(f"Downloading ONNX Runtime from {url}...")
+
+            # Download with progress indication
+            try:
+                response = requests.get(url, stream=True)
+                response.raise_for_status()
+
+                # Create temporary file for download
+                with tempfile.NamedTemporaryFile(suffix='.tgz', delete=False) as temp_file:
+                    for chunk in response.iter_content(chunk_size=8192):
+                        if chunk:
+                            temp_file.write(chunk)
+                    temp_file_path = temp_file.name
+
+                print(f"\nDownloaded ONNX Runtime to temporary file: {temp_file_path}")
+
+            except requests.RequestException as e:
+                raise CompileError(f"Failed to download ONNX Runtime: {e}")
+
+            # Extract the tarball
+            print("Extracting ONNX Runtime...")
+            try:
+                with tempfile.TemporaryDirectory() as temp_extract_dir:
+                    # Extract to temporary directory first
+                    with tarfile.open(temp_file_path, 'r:gz') as tar:
+                        tar.extractall(temp_extract_dir)
+
+                    # Find the extracted directory (should be 'onnxruntime-linux-x64-1.23.1')
+                    extracted_dirs = [d for d in os.listdir(temp_extract_dir)
+                                    if os.path.isdir(os.path.join(temp_extract_dir, d)) and d.startswith('onnxruntime')]
+
+                    if not extracted_dirs:
+                        raise CompileError("Could not find extracted ONNX Runtime directory")
+
+                    extracted_dir = os.path.join(temp_extract_dir, extracted_dirs[0])
+
+                    # Move to target location as 'onnxruntime'
+                    shutil.move(extracted_dir, self.onnxruntime_target_dir)
+
+                print(f"ONNX Runtime extracted to: {self.onnxruntime_target_dir}")
+
+            except (tarfile.TarError, OSError, shutil.Error) as e:
+                raise CompileError(f"Failed to extract ONNX Runtime: {e}")
+
+            finally:
+                # Clean up temporary file
+                if os.path.exists(temp_file_path):
+                    os.unlink(temp_file_path)
 
         def build_extension(self, ext):
             if ext.name == "gsv_oie.gsv_runtime.gsv_engine":
-                ext.library_dirs.extend([self.mnn_build_dir])
+                ext.library_dirs.extend([
+                    self.mnn_build_dir,
+                    os.path.join(self.onnxruntime_target_dir, 'lib'),
+                    ])
 
                 ext.include_dirs.extend([
                     os.path.join(self.mnn_src_dir, 'include'),
-                    os.path.join(os.path.dirname(__file__), 'extern', 'onnxruntime', 'include', 'onnxruntime'),
+                    os.path.join(self.onnxruntime_target_dir, 'include'),
                 ])
 
-                ext.libraries.extend(['MNN'])
+                ext.libraries.extend(['MNN', 'onnxruntime'])
 
             elif ext.name == "gsv_oie.text_preprocess.tokenizers_cpp":
                 ext.library_dirs.extend([self.tokenizers_cpp_build_dir])
@@ -216,6 +284,43 @@ def get_build_ext():
             super().build_extension(ext)
 
     return CoordinatedBuildExt
+
+def get_build_py():
+    from setuptools.command.build_py import build_py
+    import shutil
+
+    class CustomBuildPy(build_py):
+        def run(self):
+            # Run the standard build_py first
+            super().run()
+
+            # Copy onnxruntime files to the build directory
+            self.copy_onnxruntime_to_build()
+
+        def copy_onnxruntime_to_build(self):
+            """Copy onnxruntime files to the build directory"""
+            onnxruntime_source = os.path.join(os.path.dirname(__file__), 'extern', 'onnxruntime')
+
+            if not os.path.exists(onnxruntime_source):
+                print(f"Warning: {onnxruntime_source} does not exist")
+                return
+
+            # Copy to the build directory
+            onnxruntime_target = os.path.join(self.build_lib, 'extern', 'onnxruntime')
+
+            # Create target directory
+            os.makedirs(os.path.dirname(onnxruntime_target), exist_ok=True)
+
+            # Remove existing target if it exists
+            if os.path.exists(onnxruntime_target):
+                shutil.rmtree(onnxruntime_target)
+
+            # Copy all files and directories
+            shutil.copytree(onnxruntime_source, onnxruntime_target)
+
+            print(f"Copied ONNX Runtime to {onnxruntime_target}")
+
+    return CustomBuildPy
 
 setup(
     name='gsv_oie',
@@ -231,47 +336,14 @@ setup(
     # Package configuration
     packages=find_packages(exclude=['tests*', 'docs*', 'examples*', 'gsv_oie.pretrained_models']),
     include_package_data=True,
-    package_data={
-        'gsv_oie.text_preprocess': [
-            '**/*.py',
-            '**/*.txt',
-            '**/*.json',
-            '**/*.model',
-            '**/*.pkl',
-            '**/*.pickle',
-            '**/*.yaml',
-            '**/*.yml',
-            '**/*.cfg',
-            '**/*.ini',
-            '**/*.csv',
-            '**/*.tsv',
-            '**/*.xml',
-            '**/*.html',
-            '**/*.md',
-            '**/*.rst',
-            '**/*.dict',
-            '**/*.vocab',
-            '**/*.bin',
-            '**/*.npz',
-            '**/*.npy',
-            '**/*.h5',
-            '**/*.hdf5',
-            '**/*.marisa',
-            '**/*.marisa_trie',
-            '**/*.trie',
-            'g2pw/*',
-            'LangSegmenter/*',
-            'zh_normalization/*',
-            'en_normalization/*',
-            'ja_userdic/*',
-        ],
-    },
+    package_data={},
 
     # Python version requirement
     python_requires='>=3.7',
 
     setup_requires=[
         "cmake==3.29.2",  # Minimum version from your CMakeLists.txt
+        "requests>=2.0.0",
     ],
 
     # Dependencies
@@ -290,7 +362,10 @@ setup(
 
     # C++ extension modules
     ext_modules=get_gsv_engine_ext(),
-    cmdclass={"build_ext": get_build_ext()},
+    cmdclass={
+        "build_ext": get_build_ext(),
+        "build_py": get_build_py(),
+    },
 
 
     # Classifiers for PyPI

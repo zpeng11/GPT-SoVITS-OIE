@@ -1,7 +1,7 @@
 import soundfile as sf
 import numpy as np
 import os
-from gsv_oie.runner_registry import get_callback
+from typing import Dict, List
 
 def resample_fft(data: np.ndarray, original_sr: int, target_sr: int) -> np.ndarray:
     """
@@ -79,10 +79,25 @@ def load_audio(file_path: str) -> np.ndarray:
 def save_audio(file_path: str, audio: np.ndarray, sample_rate: int = 32000):
     sf.write(file_path, audio, sample_rate)
 
+from gsv_oie.gsv_runtime import MNNInferenceEngineInterpreter
+from gsv_oie.runner_registry import get_models_dir
+def audio_preprocess_predict(inputs:Dict[str, np.ndarray]) -> List[np.ndarray]:
+    model_path:str = os.path.join(get_models_dir(),"audio-preprocess","audio-preprocess.mnn")
+    output_names = ['hubert_ssl_output', 'spectrum', 'sv_emb']
+    if not hasattr(audio_preprocess_predict, 'mnn_engine'):
+        audio_preprocess_predict.mnn_engine = MNNInferenceEngineInterpreter(model_path)
+        print("Initialized audio preprocess MNN engine.")
+    for name in inputs:
+        value = inputs[name]
+        if value.dtype == np.int64:
+            value = value.astype(np.int32)
+    mnn_outputs = audio_preprocess_predict.mnn_engine.infer(inputs)
+    output = [mnn_outputs[name] for name in output_names]
+    return output
+
 class AudioPreprocessor:
     def __init__(self):
-        self.preprocess_predict_func = get_callback("audio_preprocess_predict")
-
+        pass
     def __call__(self, audio: np.ndarray | str, sample_rate: int = 32000) -> np.ndarray:
         if isinstance(audio, str):
             if os.path.exists(audio):
@@ -96,14 +111,14 @@ class AudioPreprocessor:
             audio = audio[:, 0]  # 取单声道简化
         if sample_rate != 32000:
             audio = resample_fft(audio, sample_rate, 32000)
-        return self.preprocess_predict_func({"audio32k": np.expand_dims(audio, axis=0)})
+        return audio_preprocess_predict({"audio32k": np.expand_dims(audio, axis=0)})
     def preprocess(self, file_path: str) -> np.ndarray:
         audio, sample_rate = sf.read(file_path)
         if audio.ndim > 1:
             audio = audio[:, 0]  # 取单声道简化
         if sample_rate != 32000:
             audio = resample_fft(audio, sample_rate, 32000)
-        return self.preprocess_predict_func({"audio32k": np.expand_dims(audio, axis=0)})
+        return audio_preprocess_predict({"audio32k": np.expand_dims(audio, axis=0)})
 
 if __name__ == "__main__":
     audio_preprocessor = AudioPreprocessor()

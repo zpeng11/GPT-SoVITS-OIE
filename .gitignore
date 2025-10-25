@@ -170,3 +170,4 @@ logs/
 outputs/
 checkpoints/
 pretrained_models/
+extern/onnxruntime/

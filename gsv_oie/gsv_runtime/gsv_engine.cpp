@@ -3,7 +3,7 @@
 #include <pybind11/stl.h>
 #include  <pybind11/complex.h>
 #include <pybind11/functional.h>
-// #include <onnxruntime_cxx_api.h>
+#include <onnxruntime_cxx_api.h>
 #include <MNN/Interpreter.hpp>
 #include <MNN/expr/Module.hpp>
 #include <MNN/expr/Executor.hpp>

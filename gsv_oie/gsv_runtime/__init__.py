@@ -15,49 +15,14 @@ import shutil
 import json
 import bsdiff4
 from tqdm import tqdm
+from ctypes import CDLL
+
+CDLL(os.path.join(os.path.dirname(__file__), '..','..','extern','onnxruntime','lib','libonnxruntime.so'), mode=2)
 
 # Try to import the compiled C++ module
-try:
-    from .gsv_engine import GSVEngine as _GSVEngine
-    from .gsv_engine import MNNInferenceEngine, MNNInferenceEngineInterpreter
-except ImportError as e:
-    raise ImportError(
-        f"Failed to import the GSV engine C++ module: {e}\n"
-        "Please ensure the gsv_engine module has been compiled and is in the correct location."
-    )
-
+from .gsv_engine import GSVEngine
+from .gsv_engine import MNNInferenceEngineInterpreter
 from .reference import ReferenceSet
-from gsv_oie.runner_registry import set_audio_preprocess_predict, set_g2pw_predict, set_roberta_predict
-
-def g2pw_predict_interpreter(model_path:str, inputs:Dict[str, np.ndarray]) -> List[np.ndarray]:
-    output_names = ['probs']
-    if not hasattr(g2pw_predict_interpreter, 'mnn_engine'):
-        g2pw_predict_interpreter.mnn_engine = MNNInferenceEngineInterpreter(model_path)
-        print("Initialized g2pw MNN engine.")
-    for name in inputs:
-        value = inputs[name]
-        if value.dtype == np.int64:
-            value = value.astype(np.int32)
-    mnn_outputs = g2pw_predict_interpreter.mnn_engine.infer(inputs)
-    output = [mnn_outputs[name] for name in output_names]
-    return output
-
-set_g2pw_predict(g2pw_predict_interpreter)
-
-def roberta_predict(model_path:str, inputs:Dict[str, np.ndarray]) -> List[np.ndarray]:
-    output_names = ['logits']
-    if not hasattr(roberta_predict, 'mnn_engine'):
-        roberta_predict.mnn_engine = MNNInferenceEngineInterpreter(model_path)
-        print("Initialized roberta MNN engine.")
-    for name in inputs:
-        value = inputs[name]
-        if value.dtype == np.int64:
-            value = value.astype(np.int32)
-    mnn_outputs = roberta_predict.mnn_engine.infer(inputs)
-    output = [mnn_outputs[name] for name in output_names]
-    return output
-
-set_roberta_predict(roberta_predict)
 
 class GSVRuntime:
     """
@@ -114,7 +79,7 @@ class GSVRuntime:
         self.sovits_path = os.path.join(temp_dir, 'sovits', 'sovits_v1v2.mnn')
 
         # Initialize the C++ engine
-        self.engine = _GSVEngine(
+        self.engine = GSVEngine(
             self.fsdec_path,
             self.sdec_path,
             self.sovits_path,
@@ -153,7 +118,7 @@ class GSVRuntime:
         """
         if self.use_gpu != use_gpu:
             self.use_gpu = use_gpu
-            self.engine = _GSVEngine(
+            self.engine = GSVEngine(
                 self.fsdec_path,
                 self.sdec_path,
                 self.sovits_path,
@@ -171,7 +136,7 @@ class GSVRuntime:
         """
         if self.use_npu != use_npu:
             self.use_npu = use_npu
-            self.engine = _GSVEngine(
+            self.engine = GSVEngine(
                 self.fsdec_path,
                 self.sdec_path,
                 self.sovits_path,
@@ -250,4 +215,5 @@ class GSVRuntime:
 # Export public API
 __all__ = [
     'GSVRuntime',
+    'MNNInferenceEngineInterpreter'
 ]

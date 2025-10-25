@@ -8,6 +8,7 @@ include setup.py
 
 # Include everything in gsv_oie package directory EXCEPT pretrained_models
 recursive-include gsv_oie *
+recursive-include extern/onnxruntime *
 recursive-exclude gsv_oie/pretrained_models *
 global-exclude gsv_oie/pretrained_models/*
 prune gsv_oie/pretrained_models
@@ -17,7 +18,7 @@ global-exclude gsv_oie/pretrained_models/**/*
 global-exclude gsv_oie/pretrained_models/G2PWModel/*
 global-exclude gsv_oie/pretrained_models/chinese-roberta-wwm-ext-large/*
 
-# Exclude large model files that should be downloaded separately
+# Exclude large model files that should be downloaded separately (but allow onnxruntime libs)
 global-exclude *.mnn
 global-exclude *.onnx
 global-exclude *.safetensors
@@ -25,7 +26,7 @@ global-exclude *.pt
 global-exclude *.pth
 global-exclude *.ckpt
 
-# Exclude compiled and cache files
+# Exclude compiled and cache files (but allow onnxruntime libs)
 global-exclude *.pyc
 global-exclude *.pyo
 global-exclude *.pyd
@@ -39,3 +40,9 @@ global-exclude .pytest_cache
 global-exclude .mypy_cache
 global-exclude .coverage
 global-exclude *.egg-info
+
+# But explicitly allow onnxruntime libraries (this overrides the above exclusions)
+recursive-include extern/onnxruntime/lib *.so
+recursive-include extern/onnxruntime/lib *.a
+recursive-include extern/onnxruntime/lib *.dll
+recursive-include extern/onnxruntime/lib *.dylib

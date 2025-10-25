@@ -1,9 +1,13 @@
 from gsv_oie import TextPreprocessor
 
 text_preprocessor = TextPreprocessor()
-result = text_preprocessor.get_phones_and_bert('인공지능: 인간 지혜의 찬란한 빛', 'auto','v2')
+result = text_preprocessor.get_phones_and_bert('인공지능: 인간 지혜의 찬란한 빛', 'ko','v2')
 print(result)
-result = text_preprocessor.get_phones_and_bert('人工智能：人类智慧的璀璨之光', 'auto','v2')
+result = text_preprocessor.get_phones_and_bert('人工智能：人类智慧的璀璨之光', 'zh','v2')
+print(result)
+result = text_preprocessor.get_phones_and_bert('人工知能：人類の知恵の輝かしい光', 'ja','v2')
+print(result)
+result = text_preprocessor.get_phones_and_bert('Artificial Intelligence: The Brilliant Light of Human Wisdom', 'en','v2')
 print(result)
 
 exit()

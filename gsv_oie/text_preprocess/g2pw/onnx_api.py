@@ -16,20 +16,32 @@ import numpy as np
 
 warnings.filterwarnings("ignore")
 
-model_version = "1.1"
-
-from gsv_oie.runner_registry import get_callback
-
 from typing import List
 from typing import Tuple
 from pathlib import Path
 from ..tokenizers_cpp import TokenizerCPP
+import os
+
+from gsv_oie.gsv_runtime import MNNInferenceEngineInterpreter
+from gsv_oie.runner_registry import get_models_dir
+def g2pw_predict_interpreter(inputs:Dict[str, np.ndarray]) -> List[np.ndarray]:
+    model_path:str = os.path.join(get_models_dir(),"G2PWModel","g2pW.mnn")
+    output_names = ['probs']
+    if not hasattr(g2pw_predict_interpreter, 'mnn_engine'):
+        g2pw_predict_interpreter.mnn_engine = MNNInferenceEngineInterpreter(model_path)
+        print("Initialized g2pw MNN engine.")
+    for name in inputs:
+        value = inputs[name]
+        if value.dtype == np.int64:
+            value = value.astype(np.int32)
+    mnn_outputs = g2pw_predict_interpreter.mnn_engine.infer(inputs)
+    output = [mnn_outputs[name] for name in output_names]
+    return output
 
 def g2pw_predict(onnx_input: Dict[str, Any], labels: List[str]) -> Tuple[List[str], List[float]]:
     all_preds = []
     all_confidences = []
-    g2pw_predict_func = get_callback('g2pw_predict')  # 获取注册的回调函数
-    probs = g2pw_predict_func({
+    probs = g2pw_predict_interpreter({
             "input_ids": onnx_input["input_ids"],
             "token_type_ids": onnx_input["token_type_ids"],
             "attention_mask": onnx_input["attention_masks"],

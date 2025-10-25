@@ -10,7 +10,6 @@ import re
 from .LangSegmenter import LangSegmenter
 from typing import Dict, List, Tuple, Any
 from .cleaner import clean_text
-from ..runner_registry import get_callback
 from .tokenizers_cpp import TokenizerCPP
 from pathlib import Path
 from .text_segmentation_method import split_big_text, splits, get_method as get_seg_method
@@ -61,6 +60,22 @@ def merge_short_text_in_array(texts: str, threshold: int) -> list:
         else:
             result[len(result) - 1] += text
     return result
+
+from gsv_oie.gsv_runtime import MNNInferenceEngineInterpreter
+from gsv_oie.runner_registry import get_models_dir
+def roberta_predict(inputs:Dict[str, np.ndarray]) -> List[np.ndarray]:
+    model_path:str = os.path.join(get_models_dir(),"chinese-roberta-wwm-ext-large","chinese-roberta-wwm-ext-large.mnn")
+    output_names = ['logits']
+    if not hasattr(roberta_predict, 'mnn_engine'):
+        roberta_predict.mnn_engine = MNNInferenceEngineInterpreter(model_path)
+        print("Initialized roberta MNN engine.")
+    for name in inputs:
+        value = inputs[name]
+        if value.dtype == np.int64:
+            value = value.astype(np.int32)
+    mnn_outputs = roberta_predict.mnn_engine.infer(inputs)
+    output = [mnn_outputs[name] for name in output_names]
+    return output
 
 class TextPreprocessor:
     def __init__(self):
@@ -206,7 +221,7 @@ class TextPreprocessor:
 
     def get_bert_feature(self, text: str, word2ph: list) -> list:
         inputs = np.array([[self.tokenizer.TokenToId("[CLS]")] + self.tokenizer.Encode(text) + [self.tokenizer.TokenToId("[SEP]")]]).astype(np.int64)
-        res = get_callback("roberta_predict")({"input_ids":inputs})[0]
+        res = roberta_predict({"input_ids":inputs})[0]
         assert len(word2ph) == len(text)
         phone_level_feature = []
         for i in range(len(word2ph)):
