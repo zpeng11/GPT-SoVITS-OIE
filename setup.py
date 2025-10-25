@@ -74,20 +74,18 @@ def get_include_dirs():
     import pybind11
     include_dirs = [
         pybind11.get_include(),
-        os.path.join(os.path.dirname(__file__), 'extern', 'MNN', 'include'),
-        os.path.join(os.path.dirname(__file__), 'extern', 'onnxruntime', 'include', 'onnxruntime'),
     ]
     return include_dirs
 
 def get_library_dirs():
     """Get library directories for the C++ extension."""
     # Only use local libraries, don't search for external ones
-    return [os.path.join(os.path.dirname(__file__), 'extern', 'MNN', 'build')]
+    return []
 
 def get_libraries():
     """Get libraries to link against."""
     # Only link against system libraries that are always available
-    return ['MNN']
+    return []
 
 def get_gsv_engine_ext():
     from pybind11.setup_helpers import Pybind11Extension
@@ -105,25 +103,43 @@ def get_gsv_engine_ext():
         extra_compile_args=["-O3", "-Wall", "-shared", "-std=c++17"],
         extra_link_args=["-O3"],
     )
-    return [gsv_engine_ext]
+
+    tokenizer_ext = Pybind11Extension(
+        "gsv_oie.text_preprocess.tokenizers_cpp",
+        sources=[
+            "gsv_oie/text_preprocess/tokenizers.cpp",
+        ],
+        include_dirs=get_include_dirs(),
+        library_dirs=get_library_dirs(),
+        libraries=get_libraries(),
+        cxx_std=17,
+        define_macros=[("VERSION_INFO", '"dev"')],
+        extra_compile_args=["-O3", "-Wall", "-shared", "-std=c++17"],
+        extra_link_args=["-O3"],
+    )
+    return [gsv_engine_ext, tokenizer_ext]
 
 def get_build_ext():
     from pybind11.setup_helpers import build_ext
     class CoordinatedBuildExt(build_ext):
         def run(self):
             # 第一步：CMake 构建（生成库）
-            self._build_cmake()
+            self.build_mnn()
+
+            self.build_tokenizers_cpp()
+
+            self.prebuild_onnxruntime()
 
             # 第二步：pybind11 扩展构建（依赖 CMake 输出）
             super().run()  # 这会按 ext_modules 顺序构建 pybind11 扩展，并链接 CMake 库
 
-        def _build_cmake(self):
+        def build_mnn(self):
             check_gcc_version()
-            self.src_dir = os.path.join(os.path.dirname(__file__), 'extern', 'MNN')
-            self.build_dir = os.path.join(self.src_dir, 'build')
+            self.mnn_src_dir = os.path.join(os.path.dirname(__file__), 'extern', 'MNN')
+            self.mnn_build_dir = os.path.join(self.mnn_src_dir, 'build')
             # 确保构建目录
-            if not os.path.exists(self.build_dir):
-                os.makedirs(self.build_dir, exist_ok=True)
+            if not os.path.exists(self.mnn_build_dir):
+                os.makedirs(self.mnn_build_dir, exist_ok=True)
 
             #需要提前配置$CC $CXX 指向gcc11以上
             # CMake 配置
@@ -136,28 +152,77 @@ def get_build_ext():
                 '-DMNN_LOW_MEMORY=ON',
                 '-DMNN_CPU_WEIGHT_DEQUANT_GEMM=ON',
                 '-DMNN_USE_SSE=ON',
-                '-S', self.src_dir,  # 源目录（项目根，含 CMakeLists.txt）
-                '-B', self.build_dir  # 构建目录
+                '-S', self.mnn_src_dir,  # 源目录（项目根，含 CMakeLists.txt）
+                '-B', self.mnn_build_dir  # 构建目录
             ]
             try:
-                subprocess.check_call(cmake_cmd, cwd=self.build_dir)
+                subprocess.check_call(cmake_cmd, cwd=self.mnn_build_dir)
             except subprocess.CalledProcessError as e:
                 raise CompileError(f'CMake config failed: {e}')
 
             # CMake 构建
-            build_cmd = ['cmake', '--build', self.build_dir, '-j8']
+            build_cmd = ['cmake', '--build', self.mnn_build_dir, '-j8']
             try:
-                subprocess.check_call(build_cmd, cwd=self.build_dir)
+                subprocess.check_call(build_cmd, cwd=self.mnn_build_dir)
             except subprocess.CalledProcessError as e:
                 raise CompileError(f'CMake build failed: {e}')
 
             # 可选：打印输出路径
-            cmake_lib_path = os.path.join(self.build_dir, 'libMNN.a')
-            if os.path.exists(cmake_lib_path):
-                print(f"CMake lib built at: {cmake_lib_path}")
+            lib_path = os.path.join(self.mnn_build_dir, 'libMNN.a')
+            if os.path.exists(lib_path):
+                print(f"MNN CMake lib built at: {lib_path}")
+
+        def build_tokenizers_cpp(self):
+            self.tokenizers_cpp_src_dir = os.path.join(os.path.dirname(__file__), 'extern', 'tokenizers-cpp')
+            self.tokenizers_cpp_build_dir = os.path.join(self.tokenizers_cpp_src_dir, 'build')
+            if not os.path.exists(self.tokenizers_cpp_build_dir):
+                os.makedirs(self.tokenizers_cpp_build_dir, exist_ok=True)
+            cmake_cmd = [
+                'cmake',
+                '-DCMAKE_BUILD_TYPE=Release',
+                '-DCMAKE_CXX_FLAGS=-fPIC',
+                '-DCMAKE_C_FLAGS=-fPIC',
+                '-S', self.tokenizers_cpp_src_dir,
+                '-B', self.tokenizers_cpp_build_dir
+            ]
+            try:
+                subprocess.check_call(cmake_cmd, cwd=self.tokenizers_cpp_build_dir)
+            except subprocess.CalledProcessError as e:
+                raise CompileError(f'Tokenizers CMake config failed: {e}')
+            build_cmd = ['cmake', '--build', self.tokenizers_cpp_build_dir, '-j8']
+            try:
+                subprocess.check_call(build_cmd, cwd=self.tokenizers_cpp_build_dir)
+            except subprocess.CalledProcessError as e:
+                raise CompileError(f'Tokenizers CMake build failed: {e}')
+
+            lib_path = os.path.join(self.tokenizers_cpp_build_dir, 'libtokenizers_cpp.a')
+            if os.path.exists(lib_path):
+                print(f"Tokenizers CMake lib built at: {lib_path}")
+
+        def prebuild_onnxruntime(self):
+            # 如果需要，可以在这里添加预构建 ONNX Runtime 的逻辑
+            pass
 
         def build_extension(self, ext):
-            # 重写以确保 pybind11 扩展能找到 CMake 库（动态注入 library_dirs）
+            if ext.name == "gsv_oie.gsv_runtime.gsv_engine":
+                ext.library_dirs.extend([self.mnn_build_dir])
+
+                ext.include_dirs.extend([
+                    os.path.join(self.mnn_src_dir, 'include'),
+                    os.path.join(os.path.dirname(__file__), 'extern', 'onnxruntime', 'include', 'onnxruntime'),
+                ])
+
+                ext.libraries.extend(['MNN'])
+
+            elif ext.name == "gsv_oie.text_preprocess.tokenizers_cpp":
+                ext.library_dirs.extend([self.tokenizers_cpp_build_dir])
+
+                ext.include_dirs.extend([
+                    os.path.join(self.tokenizers_cpp_src_dir, 'include'),
+                ])
+
+                ext.libraries.extend(['tokenizers_c','tokenizers_cpp'])
+
             super().build_extension(ext)
 
     return CoordinatedBuildExt
@@ -214,6 +279,10 @@ setup(
 
     # Python version requirement
     python_requires='>=3.7',
+
+    setup_requires=[
+        "cmake==3.29.2",  # Minimum version from your CMakeLists.txt
+    ],
 
     # Dependencies
     install_requires=read_requirements(),

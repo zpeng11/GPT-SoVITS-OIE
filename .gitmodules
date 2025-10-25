@@ -7,3 +7,6 @@
 [submodule "extern/MNN"]
 	path = extern/MNN
 	url = https://github.com/alibaba/MNN.git
+[submodule "extern/tokenizers-cpp"]
+	path = extern/tokenizers-cpp
+	url = https://github.com/mlc-ai/tokenizers-cpp.git

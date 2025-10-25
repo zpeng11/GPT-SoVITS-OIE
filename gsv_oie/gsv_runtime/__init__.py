@@ -29,41 +29,6 @@ except ImportError as e:
 from .reference import ReferenceSet
 from gsv_oie.runner_registry import set_audio_preprocess_predict, set_g2pw_predict, set_roberta_predict
 
-
-def g2pw_predict(model_path:str, inputs:Dict[str, np.ndarray]) -> List[np.ndarray]:
-    input_names = ['input_ids', 'token_type_ids', 'attention_mask', 'phoneme_mask', 'char_ids', 'position_ids']
-    output_names = ['probs']
-    if not hasattr(g2pw_predict, 'mnn_engine'):
-        g2pw_predict.mnn_engine = MNNInferenceEngine(model_path, input_names, output_names)
-        print("Initialized g2pw MNN engine.")
-    inputs_list = []
-    for name in input_names:
-        value = inputs[name]
-        if value.dtype == np.int64:
-            value = value.astype(np.int32)
-        inputs_list.append(value)
-    return g2pw_predict.mnn_engine.infer(inputs_list)
-
-def g2pw_predict_python(model_path:str, inputs:Dict[str, np.ndarray]) -> List[np.ndarray]:
-    import MNN
-    import MNN.numpy as mnp
-    input_names = ['input_ids', 'token_type_ids', 'attention_mask', 'phoneme_mask', 'char_ids', 'position_ids']
-    output_names = ['probs']
-    # Initialize on first call
-    if not hasattr(g2pw_predict_python, 'mnn_model'):
-        g2pw_predict_python.mnn_model = MNN.nn.load_module_from_file(model_path, input_names, output_names)
-        print("Initialized g2pw MNN model.")
-
-    mnn_inputs = []
-    for name in input_names:
-        value = inputs[name]
-        if value.dtype == np.int64:
-            value = value.astype(np.int32)
-        mnn_inputs.append(mnp.array(value))
-    mnn_outputs = g2pw_predict_python.mnn_model(mnn_inputs)
-
-    return [mnn_output.read() for mnn_output in mnn_outputs]
-
 def g2pw_predict_interpreter(model_path:str, inputs:Dict[str, np.ndarray]) -> List[np.ndarray]:
     output_names = ['probs']
     if not hasattr(g2pw_predict_interpreter, 'mnn_engine'):
@@ -73,18 +38,26 @@ def g2pw_predict_interpreter(model_path:str, inputs:Dict[str, np.ndarray]) -> Li
         value = inputs[name]
         if value.dtype == np.int64:
             value = value.astype(np.int32)
-    outputs = g2pw_predict_interpreter.mnn_engine.infer(inputs)
-    output = [outputs[name] for name in output_names]
-
-    old_output = g2pw_predict(model_path, inputs)
-    for module_out, interp_out in zip(old_output, output):
-        assert np.allclose(module_out, interp_out, atol=1e-5), "Outputs from module and interpreter do not match!"
-    python_out = g2pw_predict_python(model_path, inputs)
-    for module_out, py_out in zip(old_output, python_out):
-        assert np.allclose(module_out, py_out, atol=1e-5), "Outputs from module and python API do not match!"
+    mnn_outputs = g2pw_predict_interpreter.mnn_engine.infer(inputs)
+    output = [mnn_outputs[name] for name in output_names]
     return output
 
 set_g2pw_predict(g2pw_predict_interpreter)
+
+def roberta_predict(model_path:str, inputs:Dict[str, np.ndarray]) -> List[np.ndarray]:
+    output_names = ['logits']
+    if not hasattr(roberta_predict, 'mnn_engine'):
+        roberta_predict.mnn_engine = MNNInferenceEngineInterpreter(model_path)
+        print("Initialized roberta MNN engine.")
+    for name in inputs:
+        value = inputs[name]
+        if value.dtype == np.int64:
+            value = value.astype(np.int32)
+    mnn_outputs = roberta_predict.mnn_engine.infer(inputs)
+    output = [mnn_outputs[name] for name in output_names]
+    return output
+
+set_roberta_predict(roberta_predict)
 
 class GSVRuntime:
     """
