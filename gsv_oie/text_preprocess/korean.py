@@ -1,12 +1,14 @@
 # reference: https://github.com/ORI-Muchim/MB-iSTFT-VITS-Korean/blob/main/text/korean.py
 
 import re
+import os
+from ..runner_registry import get_models_dir
+os.environ["NLTK_DATA"] = os.path.join(get_models_dir(),"nltk_data")
 from jamo import h2j, j2hcj
 import ko_pron
 from g2pk2 import G2p
 
 import importlib
-import os
 
 # 防止win下无法读取模型
 if os.name == "nt":
