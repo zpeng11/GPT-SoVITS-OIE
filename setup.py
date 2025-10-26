@@ -78,6 +78,9 @@ def get_gsv_engine_ext():
         sources=[
             "gsv_oie/gsv_runtime/cpp/gsv_engine.cpp",
             "gsv_oie/gsv_runtime/cpp/fp16.cpp",
+            "gsv_oie/gsv_runtime/cpp/MNNInferenceEngine.cpp",
+            "gsv_oie/gsv_runtime/cpp/MNNInferenceEngineInterpreter.cpp",
+            "gsv_oie/gsv_runtime/cpp/utils.cpp",
         ],
         include_dirs=[pybind11.get_include(), os.path.join(os.path.dirname(__file__), 'gsv_oie', 'gsv_runtime', 'cpp')],
         library_dirs=[],
