@@ -69,24 +69,17 @@ def check_gcc_version():
         raise CompileError("Timeout getting GCC version.")
 
 
-# C++ extension configuration
-def get_include_dirs():
-    """Get include directories for the C++ extension."""
-    import pybind11
-    include_dirs = [
-        pybind11.get_include(),
-    ]
-    return include_dirs
-
 def get_gsv_engine_ext():
     from pybind11.setup_helpers import Pybind11Extension
+    import pybind11
     # Define the C++ extension
     gsv_engine_ext = Pybind11Extension(
         "gsv_oie.gsv_runtime.gsv_engine",
         sources=[
-            "gsv_oie/gsv_runtime/gsv_engine.cpp",
+            "gsv_oie/gsv_runtime/cpp/gsv_engine.cpp",
+            "gsv_oie/gsv_runtime/cpp/fp16.cpp",
         ],
-        include_dirs=get_include_dirs(),
+        include_dirs=[pybind11.get_include(), os.path.join(os.path.dirname(__file__), 'gsv_oie', 'gsv_runtime', 'cpp')],
         library_dirs=[],
         libraries=[],
         cxx_std=17,
@@ -100,7 +93,7 @@ def get_gsv_engine_ext():
         sources=[
             "gsv_oie/text_preprocess/tokenizers.cpp",
         ],
-        include_dirs=get_include_dirs(),
+        include_dirs=[pybind11.get_include()],
         library_dirs=[],
         libraries=[],
         cxx_std=17,
@@ -268,6 +261,7 @@ def get_build_ext():
                 ext.include_dirs.extend([
                     os.path.join(self.mnn_src_dir, 'include'),
                     os.path.join(self.onnxruntime_target_dir, 'include'),
+                    os.path.join(os.path.dirname(__file__), 'extern', 'fp16', 'include'),
                 ])
 
                 ext.libraries.extend(['MNN', 'onnxruntime'])

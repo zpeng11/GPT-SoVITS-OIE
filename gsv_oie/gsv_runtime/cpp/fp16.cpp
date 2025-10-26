@@ -26,9 +26,11 @@ bool has_fp16_support() {
 }
 
 #include "fp16.h"        // FP16 库头 (header-only)
-#include <arm_neon.h>    // NEON intrinsics
+// #include <arm_neon.h>    // NEON intrinsics
 #include <vector>
 #include <cstdint>
+
+/*
 
 // 假设您的矩阵是 float* input, size_t rows, size_t cols
 void convert_matrix_fp32_to_fp16(const float* input, uint16_t* output,
@@ -59,3 +61,5 @@ void convert_matrix_fp32_to_fp16(const float* input, uint16_t* output,
         }
     }
 }
+
+*/
