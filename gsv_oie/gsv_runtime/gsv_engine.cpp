@@ -318,6 +318,35 @@ class MNNInferenceEngineInterpreter: NonCopyable {
         }
         return output_dict;
     }
+
+    std::map<std::string, TensorDataGuard> infer_tensor(const std::map<std::string, const py::array *>& input_map){
+        auto input_tensors = interpreter_->getSessionInputAll(session_);
+        for(auto item : input_tensors){
+            const auto name = item.first;
+            if(input_map.find(name) == input_map.end()){
+                throw std::runtime_error("Input map missing required key: " + name);
+            }
+            const py::array& input_array = *(input_map.at(name));
+            MNN::Tensor* tensor = item.second;
+            interpreter_->resizeTensor(tensor, get_shape_from_numpy_array(input_array));
+        }
+        interpreter_->resizeSession(session_);
+        for(auto item : input_tensors){
+            const auto name = item.first;
+            const py::array& input_array = *(input_map.at(name));
+            MNN::Tensor* tensor = item.second;
+            copy_numpy_array_to_tensor(input_array, tensor);
+        }
+        interpreter_->runSession(session_);
+        std::map<std::string, TensorDataGuard> output_map;
+        auto output_tensors = interpreter_->getSessionOutputAll(session_);
+        for(auto& items : output_tensors){
+            const auto name = items.first;
+            MNN::Tensor* tensor = items.second;
+            output_map.emplace(name, TensorDataGuard(tensor, false));
+        }
+        return output_map;
+    }
     ~MNNInferenceEngineInterpreter(){
         CPP_PRINT("MNNInferenceEngineInterpreter destroyed");
     }
@@ -343,6 +372,9 @@ class GSVEngine {
         use_gpu_ = use_gpu;
         use_npu_ = use_npu;
         quantized_ = quantized;
+        fsdec_path_ = fsdec_path;
+        sdec_path_ = sdec_path;
+        sovits_path_ = sovits_path;
     }
     ~GSVEngine(){
         CPP_PRINT("GSVEngine destroyed");
@@ -354,16 +386,28 @@ class GSVEngine {
         CPP_PRINT("Received norm_text: " + norm_text);
 
         check_dict_key(ref_dict, "phones");
-        auto encoder_ref_seq = ref_dict["phones"].cast<py::array_t<int64_t, py::array::c_style | py::array::forcecast>>();
+        py::array encoder_ref_seq;
+        if(!quantized_){
+            encoder_ref_seq = ref_dict["phones"].cast<py::array_t<int32_t, py::array::c_style | py::array::forcecast>>();
+        }
+        else{
+            encoder_ref_seq = ref_dict["phones"].cast<py::array_t<int64_t, py::array::c_style | py::array::forcecast>>();
+        }
         check_dict_key(ref_dict, "bert_features");
-        auto encoder_ref_bert = ref_dict["bert_features"].cast<py::array_t<float, py::array::c_style | py::array::forcecast>>();
+        py::array encoder_ref_bert = ref_dict["bert_features"].cast<py::array_t<float, py::array::c_style | py::array::forcecast>>();
         check_dict_key(ref_dict, "hubert_ssl_output");
-        auto encoder_ssl_content = ref_dict["hubert_ssl_output"].cast<py::array_t<float, py::array::c_style | py::array::forcecast>>();
+        py::array encoder_ssl_content = ref_dict["hubert_ssl_output"].cast<py::array_t<float, py::array::c_style | py::array::forcecast>>();
 
         check_dict_key(text_input, "phones");
-        auto encoder_text_seq = text_input["phones"].cast<py::array_t<int64_t, py::array::c_style | py::array::forcecast>>();
+        py::array encoder_text_seq;
+        if(!quantized_){
+            encoder_text_seq = text_input["phones"].cast<py::array_t<int32_t, py::array::c_style | py::array::forcecast>>();
+        }
+        else{
+            encoder_text_seq = text_input["phones"].cast<py::array_t<int64_t, py::array::c_style | py::array::forcecast>>();
+        }
         check_dict_key(text_input, "bert_features");
-        auto encoder_text_bert = text_input["bert_features"].cast<py::array_t<float, py::array::c_style | py::array::forcecast>>();
+        py::array encoder_text_bert = text_input["bert_features"].cast<py::array_t<float, py::array::c_style | py::array::forcecast>>();
 
         check_dict_key(sampling_params, "top_k");
         int top_k = sampling_params["top_k"].cast<int>();
@@ -377,11 +421,33 @@ class GSVEngine {
         return py::array_t<float>(output_data.size(), output_data.data());
     }
 
+    void fsdec_infer(const py::array&encoder_ref_seq, 
+                     const py::array&encoder_ref_bert, 
+                     const py::array&encoder_ssl_content,
+                     const py::array&encoder_text_seq,
+                     const py::array&encoder_text_bert) {
+        // Implementation of fsdec_infer would go here
+        if(!fsdec_engine_){
+            fsdec_engine_ = std::make_shared<MNNInferenceEngineInterpreter>(fsdec_path_);
+        }
+        auto input_map = std::map<std::string, const py::array *>{
+            {"encoder_ref_seq", &encoder_ref_seq},
+            {"encoder_ref_bert", &encoder_ref_bert},
+            {"encoder_ssl_content", &encoder_ssl_content},
+            {"encoder_text_seq", &encoder_text_seq},
+            {"encoder_text_bert", &encoder_text_bert}
+        };
+        auto output_map = fsdec_engine_->infer_tensor(input_map);
+    }
+
     private:
-    std::shared_ptr<MNNInferenceEngine> fsdec_engine_;
+    std::shared_ptr<MNNInferenceEngineInterpreter> fsdec_engine_;
     bool use_gpu_ = false;
     bool use_npu_ = false;
     bool quantized_ = false;
+    std::string fsdec_path_;
+    std::string sdec_path_;
+    std::string sovits_path_;
 };
 
 

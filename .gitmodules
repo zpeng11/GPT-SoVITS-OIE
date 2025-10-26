@@ -7,3 +7,6 @@
 [submodule "extern/tokenizers-cpp"]
 	path = extern/tokenizers-cpp
 	url = https://github.com/mlc-ai/tokenizers-cpp.git
+[submodule "extern/fp16"]
+	path = extern/fp16
+	url = https://github.com/Maratyszcza/FP16.git
