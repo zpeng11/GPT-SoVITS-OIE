@@ -110,3 +110,8 @@ py::array create_numpy_array_from_tensor(MNN::Tensor* tensor);
     #define LIKELY(expr) (expr)
     #define UNLIKELY(expr) (expr)
 #endif
+
+void convert_vector_fp32_to_fp16_corrected(uint16_t* dst, const float* src, size_t size);
+void convert_vector_fp16_to_fp32(float* dst, const uint16_t* src, size_t size);
+void convert_vector_int64_to_int32(int32_t* dst, const int64_t* src, ssize_t size);
+void convert_vector_int32_to_int64(int64_t* dst, const int32_t* src, ssize_t size);

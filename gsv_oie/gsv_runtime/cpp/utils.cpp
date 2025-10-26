@@ -6,6 +6,7 @@
 #include <string>
 #include <cstdint>
 #include <cstddef>  // for std::size_t, but using ssize_t
+#include <fp16.h>
 
 // Forward declaration for intrinsics; include appropriate headers based on compiler
 #if defined(__x86_64__) || defined(_M_X64)
@@ -168,46 +169,8 @@ TensorDataGuard::~TensorDataGuard(){
     }
 }
 
-#ifndef HWCAP_FP16
-#define HWCAP_FP16 (1UL << 24)  // ARM FP16 位掩码
-#endif
-
-bool has_fp16_support() {
-    // 方法1: getauxval (AArch64 推荐，快速)
-    unsigned long hwcap2 = getauxval(AT_HWCAP2);
-    if (hwcap2 & HWCAP_FP16) {
-        return true;
-    }
-
-    // 方法2: /proc/cpuinfo fallback (兼容性好)
-    std::ifstream cpuinfo("/proc/cpuinfo");
-    std::string line;
-    while (std::getline(cpuinfo, line)) {
-        if (line.rfind("Features :", 0) == 0) {  // 注意冒号
-            return line.find("fp16") != std::string::npos;
-        }
-    }
-    return false;
-}
 
 #define I32_TO_I64_BLOCK_SIZE 512  // 块大小，可调节以优化缓存利用率
-
-void process_block_int32_to_int64(int64_t* dst, const int32_t* src, ssize_t block_size);
-void convert_vector_int32_to_int64(int64_t* dst, const int32_t* src, ssize_t size) {
-    if (size <= 0) return;
-    // Assume pointers are 64-byte aligned as per requirement
-#if USE_OPENMP
-    // OpenMP multi-threading: Parallelize over blocks (schedule static for contiguous data)
-    #pragma omp parallel for schedule(static) num_threads(omp_get_max_threads())
-    for (ssize_t block_start = 0; block_start < size; block_start += I32_TO_I64_BLOCK_SIZE) {  // Block size tunable, e.g., 1024 elements
-        ssize_t block_end = std::min(block_start + I32_TO_I64_BLOCK_SIZE, size);
-        process_block_int32_to_int64(dst + block_start, src + block_start, block_end - block_start);
-    }
-#else
-    // Single-thread fallback: Process entire range
-    process_block_int32_to_int64(dst, src, size);
-#endif
-}
 
 // Helper function to process a contiguous block with SIMD + unroll + prefetch
 void process_block_int32_to_int64(int64_t* dst, const int32_t* src, ssize_t block_size) {
@@ -260,25 +223,19 @@ void process_block_int32_to_int64(int64_t* dst, const int32_t* src, ssize_t bloc
 #endif
 }
 
-#define I64_TO_I32_BLOCK_SIZE 256  // 块大小，可调节以优化缓存利用率
-
-void process_block_int64_to_int32(int32_t* dst, const int64_t* src, ssize_t block_size);
-void convert_vector_int64_to_int32(int32_t* dst, const int64_t* src, ssize_t size) {
+void convert_vector_int32_to_int64(int64_t* dst, const int32_t* src, ssize_t size) {
     if (size <= 0) return;
     // Assume pointers are 64-byte aligned as per requirement
-#if USE_OPENMP
+    bool use_parallel = (size > 1024) && (USE_OPENMP != 0);
     // OpenMP multi-threading: Parallelize over blocks (schedule static for contiguous data)
-    #pragma omp parallel for schedule(static) num_threads(omp_get_max_threads())
-    for (ssize_t block_start = 0; block_start < size; block_start += I64_TO_I32_BLOCK_SIZE) {  // Block size tunable, e.g., 1024 elements
-        ssize_t block_end = std::min(block_start + I64_TO_I32_BLOCK_SIZE, size);
-        process_block_int64_to_int32(dst + block_start, src + block_start, block_end - block_start);
+    #pragma omp parallel for schedule(static) if(use_parallel) num_threads(omp_get_max_threads())
+    for (ssize_t block_start = 0; block_start < size; block_start += I32_TO_I64_BLOCK_SIZE) {  // Block size tunable, e.g., 1024 elements
+        ssize_t block_end = std::min(block_start + I32_TO_I64_BLOCK_SIZE, size);
+        process_block_int32_to_int64(dst + block_start, src + block_start, block_end - block_start);
     }
-#else
-    // Single-thread fallback: Process entire range
-    process_block_int64_to_int32(dst, src, size);
-#endif
 }
 
+#define I64_TO_I32_BLOCK_SIZE 256  // 块大小，可调节以优化缓存利用率
 
 // SIMD + Unroll + Prefetch version of int64 -> int32 conversion
 void process_block_int64_to_int32(int32_t* dst, const int64_t* src, ssize_t block_size) {
@@ -342,6 +299,19 @@ void process_block_int64_to_int32(int32_t* dst, const int64_t* src, ssize_t bloc
 #endif
 }
 
+void convert_vector_int64_to_int32(int32_t* dst, const int64_t* src, ssize_t size) {
+    if (size <= 0) return;
+    // Assume pointers are 64-byte aligned as per requirement
+    bool use_parallel = (size > 1024) && (USE_OPENMP != 0);
+    // OpenMP multi-threading: Parallelize over blocks (schedule static for contiguous data)
+    #pragma omp parallel for schedule(static) if(use_parallel) num_threads(omp_get_max_threads())
+    for (ssize_t block_start = 0; block_start < size; block_start += I64_TO_I32_BLOCK_SIZE) {  // Block size tunable, e.g., 1024 elements
+        ssize_t block_end = std::min(block_start + I64_TO_I32_BLOCK_SIZE, size);
+        process_block_int64_to_int32(dst + block_start, src + block_start, block_end - block_start);
+    }
+
+}
+
 std::vector<int32_t> transform_int64_to_int32(const int64_t* src, size_t size) {
     std::vector<int32_t> dst(size);
     convert_vector_int64_to_int32(dst.data(), src, static_cast<ssize_t>(size));
@@ -352,4 +322,135 @@ std::vector<int64_t> transform_int32_to_int64(const int32_t* src, size_t size) {
     std::vector<int64_t> dst(size);
     convert_vector_int32_to_int64(dst.data(), src, static_cast<ssize_t>(size));
     return dst;
+}
+
+#ifndef HWCAP_FP16
+#define HWCAP_FP16 (1UL << 24)  // ARM FP16 位掩码
+#endif
+
+bool has_fp16_support() {
+#if defined(__aarch64__) && defined(__ARM_NEON)
+    unsigned long hwcap2 = getauxval(AT_HWCAP2);
+    if (hwcap2 & HWCAP_FP16) {
+        return true;
+    }
+#endif // __aarch64__ && __ARM_NEON
+    std::ifstream cpuinfo("/proc/cpuinfo");
+    std::string line;
+    while (std::getline(cpuinfo, line)) {
+        if (line.rfind("Features :", 0) == 0) {  // 注意冒号
+            return line.find("fp16") != std::string::npos;
+        }
+    }
+    return false;
+}
+
+void convert_vector_fp32_to_fp16_corrected(uint16_t* output, const float* input, size_t size) {
+    constexpr size_t BLOCK_SIZE = 512;
+    constexpr size_t PREFETCH_DIST = 32;
+
+    static bool fp16_enabled = has_fp16_support();
+    if (size == 0) return;
+
+    bool use_parallel = (size > 1024) && (USE_OPENMP != 0);
+
+    if (fp16_enabled) {
+        // Hardware Path
+        #pragma omp parallel for schedule(static) if(use_parallel)
+        for (size_t block_start = 0; block_start < size; block_start += BLOCK_SIZE) {
+            size_t block_end = std::min(block_start + BLOCK_SIZE, size);
+
+            if (LIKELY(block_start + BLOCK_SIZE + PREFETCH_DIST <= size)) {
+                __builtin_prefetch(&input[block_start + BLOCK_SIZE + PREFETCH_DIST], 0, 3);
+            }
+
+            size_t i = block_start;
+            // SIMD loop processes 8 elements at a time
+#if defined(__aarch64__) && defined(__ARM_NEON)
+            for (; i + 7 < block_end; i += 8) {
+                float32x4_t lo = vld1q_f32(&input[i]);
+                float32x4_t hi = vld1q_f32(&input[i + 4]);
+                float16x8_t h = vcombine_f16(vcvt_f16_f32(lo), vcvt_f16_f32(hi));
+                vst1q_u16(&output[i], vreinterpretq_u16_f16(h));
+            }
+#endif // __aarch64__ && __ARM_NEON
+            // Tail loop to handle remaining elements in the block
+            for (; i < block_end; ++i) {
+                output[i] = fp16_ieee_from_fp32_value(input[i]);
+            }
+        }
+    } else {
+        // Software Path
+        #pragma omp parallel for schedule(static) if(use_parallel)
+        for (size_t block_start = 0; block_start < size; block_start += BLOCK_SIZE) {
+            size_t block_end = std::min(block_start + BLOCK_SIZE, size);
+
+            if (LIKELY(block_start + BLOCK_SIZE + PREFETCH_DIST <= size)) {
+                __builtin_prefetch(&input[block_start + BLOCK_SIZE + PREFETCH_DIST], 0, 3);
+            }
+            
+            // A simple scalar loop is clearer and avoids the bugs
+            for (size_t i = block_start; i < block_end; ++i) {
+                output[i] = fp16_ieee_from_fp32_value(input[i]);
+            }
+        }
+    }
+}
+
+
+void convert_vector_fp16_to_fp32(float* output, const uint16_t* input, size_t size) {
+    constexpr size_t BLOCK_SIZE = 256;
+    constexpr size_t PREFETCH_DIST = 32;
+
+    static bool fp16_enabled = has_fp16_support();
+    if (size == 0) return;
+
+    bool use_parallel = (size > 1024) && (USE_OPENMP != 0);
+
+    if (fp16_enabled) {
+        // Hardware Path
+        #pragma omp parallel for schedule(static) if(use_parallel)
+        for (size_t block_start = 0; block_start < size; block_start += BLOCK_SIZE) {
+            size_t block_end = std::min(block_start + BLOCK_SIZE, size);
+
+            if (LIKELY(block_start + BLOCK_SIZE + PREFETCH_DIST <= size)) {
+                __builtin_prefetch(&input[block_start + BLOCK_SIZE + PREFETCH_DIST], 0, 3);
+            }
+
+            size_t i = block_start;
+            // SIMD loop processes 8 elements at a time
+#if defined(__aarch64__) && defined(__ARM_NEON)
+            for (; i + 7 < block_end; i += 8) {
+                // Load 8 half-precision floats
+                uint16x8_t h_u16 = vld1q_u16(&input[i]);
+                float16x8_t h_f16 = vreinterpretq_f16_u16(h_u16);
+                // Widen to two vectors of single-precision floats
+                float32x4_t lo = vcvt_f32_f16(vget_low_f16(h_f16));
+                float32x4_t hi = vcvt_f32_f16(vget_high_f16(h_f16));
+                // Store the two resulting vectors separately
+                vst1q_f32(&output[i], lo);       // Store the first 4 floats
+                vst1q_f32(&output[i + 4], hi);   // Store the next 4 floats
+            }
+#endif
+            // Tail loop to handle remaining elements in the block
+            for (; i < block_end; ++i) {
+                output[i] = fp16_ieee_to_fp32_bits(input[i]);
+            }
+        }
+    } else {
+        // Software Path
+        #pragma omp parallel for schedule(static) if(use_parallel)
+        for (size_t block_start = 0; block_start < size; block_start += BLOCK_SIZE) {
+            size_t block_end = std::min(block_start + BLOCK_SIZE, size);
+
+            if (LIKELY(block_start + BLOCK_SIZE + PREFETCH_DIST <= size)) {
+                __builtin_prefetch(&input[block_start + BLOCK_SIZE + PREFETCH_DIST], 0, 3);
+            }
+            
+            // A simple scalar loop is clearer and avoids the bugs
+            for (size_t i = block_start; i < block_end; ++i) {
+                output[i] = fp16_ieee_to_fp32_bits(input[i]);
+            }
+        }
+    }
 }
