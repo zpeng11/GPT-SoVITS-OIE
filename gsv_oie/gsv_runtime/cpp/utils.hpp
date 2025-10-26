@@ -96,3 +96,17 @@ private:
 // Tensor utility functions for MNNInferenceEngineInterpreter
 void copy_numpy_array_to_tensor(const py::array& array, MNN::Tensor* tensor);
 py::array create_numpy_array_from_tensor(MNN::Tensor* tensor);
+
+#if defined(__GNUC__) || defined(__clang__)
+    // GCC/Clang: 使用 __builtin_expect
+    #define LIKELY(expr) __builtin_expect(!!(expr), 1)
+    #define UNLIKELY(expr) __builtin_expect(!!(expr), 0)
+#elif defined(_MSC_VER)
+    // MSVC: 无内置提示，回退到原表达式（在 -O2 等优化下仍有效）
+    #define LIKELY(expr) (expr)
+    #define UNLIKELY(expr) (expr)
+#else
+    // 其他编译器：默认回退
+    #define LIKELY(expr) (expr)
+    #define UNLIKELY(expr) (expr)
+#endif

@@ -77,7 +77,6 @@ def get_gsv_engine_ext():
         "gsv_oie.gsv_runtime.gsv_engine",
         sources=[
             "gsv_oie/gsv_runtime/cpp/gsv_engine.cpp",
-            "gsv_oie/gsv_runtime/cpp/fp16.cpp",
             "gsv_oie/gsv_runtime/cpp/MNNInferenceEngine.cpp",
             "gsv_oie/gsv_runtime/cpp/MNNInferenceEngineInterpreter.cpp",
             "gsv_oie/gsv_runtime/cpp/utils.cpp",
@@ -87,8 +86,8 @@ def get_gsv_engine_ext():
         libraries=[],
         cxx_std=17,
         define_macros=[("VERSION_INFO", '"dev"')],
-        extra_compile_args=["-O3", "-Wall", "-shared", "-std=c++17"],
-        extra_link_args=["-O3"],
+        extra_compile_args=["-O3", "-Wall", "-shared", "-std=c++17", "-fopenmp"],
+        extra_link_args=["-O3", "-fopenmp"],
     )
 
     tokenizer_ext = Pybind11Extension(

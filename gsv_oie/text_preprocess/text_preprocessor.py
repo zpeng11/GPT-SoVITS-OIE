@@ -69,10 +69,6 @@ def roberta_predict(inputs:Dict[str, np.ndarray]) -> List[np.ndarray]:
     if not hasattr(roberta_predict, 'mnn_engine'):
         roberta_predict.mnn_engine = MNNInferenceEngineInterpreter(model_path)
         print("Initialized roberta MNN engine.")
-    for name in inputs:
-        value = inputs[name]
-        if value.dtype == np.int64:
-            value = value.astype(np.int32)
     mnn_outputs = roberta_predict.mnn_engine.infer(inputs)
     output = [mnn_outputs[name] for name in output_names]
     return output
