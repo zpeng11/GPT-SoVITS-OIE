@@ -43,6 +43,23 @@ std::vector<ssize_t> to_ssize_t_vector(const std::vector<int>& vec) {
     return result;
 }
 
+std::vector<int64_t> to_ort_shape_vector(const std::vector<int>& vec) {
+    std::vector<int64_t> result;
+    result.reserve(vec.size());
+    for (const auto& v : vec) {
+        result.push_back(static_cast<int64_t>(v));
+    }
+    return result;
+}
+std::vector<int64_t> to_ort_shape_vector(const std::vector<ssize_t>& vec) {
+    std::vector<int64_t> result;
+    result.reserve(vec.size());
+    for (const auto& v : vec) {
+        result.push_back(static_cast<int64_t>(v));
+    }
+    return result;
+}
+
 std::string shape_vector_to_string(const std::vector<int>& shape) {
     std::string shape_str = "[";
     for (size_t i = 0; i < shape.size(); ++i) {
@@ -167,6 +184,10 @@ TensorDataGuard::~TensorDataGuard(){
     if(tensor_){
         tensor_->unmap(is_writing_ ? MNN::Tensor::MAP_TENSOR_WRITE : MNN::Tensor::MAP_TENSOR_READ, tensor_->getDimensionType(), ptr_);
     }
+}
+
+std::vector<int> TensorDataGuard::shape() {
+    return tensor_->shape();
 }
 
 
@@ -345,7 +366,7 @@ bool has_fp16_support() {
     return false;
 }
 
-void convert_vector_fp32_to_fp16_corrected(uint16_t* output, const float* input, size_t size) {
+void convert_vector_fp32_to_fp16(uint16_t* output, const float* input, size_t size) {
     constexpr size_t BLOCK_SIZE = 512;
     constexpr size_t PREFETCH_DIST = 32;
 

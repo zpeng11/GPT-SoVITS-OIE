@@ -30,6 +30,8 @@ def g2pw_predict_interpreter(inputs:Dict[str, np.ndarray]) -> List[np.ndarray]:
     if not hasattr(g2pw_predict_interpreter, 'mnn_engine'):
         g2pw_predict_interpreter.mnn_engine = MNNInferenceEngineInterpreter(model_path)
         print("Initialized g2pw MNN engine.")
+    for name in inputs:
+        inputs[name] = np.ascontiguousarray(inputs[name])
     mnn_outputs = g2pw_predict_interpreter.mnn_engine.infer(inputs)
     output = [mnn_outputs[name] for name in output_names]
     return output

@@ -75,7 +75,7 @@ class GSVRuntime:
         self.use_npu = use_npu
 
         self.fsdec_path = os.path.join(temp_dir, 't2s', 't2s_fsdec_quant.onnx') if self.is_quantized else os.path.join(temp_dir, 't2s', 't2s_fsdec.mnn')
-        self.sdec_path = os.path.join(temp_dir, 't2s', 't2s_sdec_quant.onnx') if not self.is_quantized else os.path.join(temp_dir, 't2s', 't2s_sdec.onnx')
+        self.sdec_path = os.path.join(temp_dir, 't2s', 't2s_sdec_quant.onnx') if self.is_quantized else os.path.join(temp_dir, 't2s', 't2s_sdec.onnx')
         self.sovits_path = os.path.join(temp_dir, 'sovits', 'sovits_v1v2.mnn')
 
         # Initialize the C++ engine
@@ -188,12 +188,11 @@ class GSVRuntime:
             else:
                 text_input_dict = processed_text
             ref_set_dict = self.reference_set.to_dict()
-            for key, value in ref_set_dict.items():
-                if value.dtype == np.int64:
-                    ref_set_dict[key] = value.astype(np.int32)
-            for key, value in text_input_dict.items():
-                if isinstance(value, np.ndarray) and value.dtype == np.int64:
-                    text_input_dict[key] = value.astype(np.int32)
+            for key in ref_set_dict:
+                ref_set_dict[key] = np.ascontiguousarray(ref_set_dict[key])
+            for key in text_input_dict:
+                if isinstance(text_input_dict[key], np.ndarray):
+                    text_input_dict[key] = np.ascontiguousarray(text_input_dict[key])
             result_audios.append(self.engine.infer(ref_set_dict, text_input_dict, sampling_params))
             if output_audio_interval > 0.0:
                 interval_samples = int(output_audio_interval * 32000)

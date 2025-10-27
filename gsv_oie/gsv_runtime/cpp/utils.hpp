@@ -16,6 +16,7 @@
 #include <algorithm>
 #include <limits>
 #include <cstring>
+#include <fp16.h>
 
 namespace py = pybind11;
 
@@ -45,6 +46,8 @@ public:
 // Common utility functions
 std::vector<int> get_shape_from_numpy_array(const py::array& array);
 std::vector<ssize_t> to_ssize_t_vector(const std::vector<int>& vec);
+std::vector<int64_t> to_ort_shape_vector(const std::vector<int>& vec);
+std::vector<int64_t> to_ort_shape_vector(const std::vector<ssize_t>& vec);
 std::vector<int32_t> transform_int64_to_int32(const int64_t* src, size_t size);
 std::vector<int64_t> transform_int32_to_int64(const int32_t* src, size_t size);
 std::string shape_vector_to_string(const std::vector<int>& shape);
@@ -85,6 +88,7 @@ public:
     TensorDataGuard& operator=(TensorDataGuard&& other) noexcept;
     void * ptr();
     MNN::Tensor* tensor();
+    std::vector<int> shape();
     ~TensorDataGuard();
 
 private:
@@ -111,7 +115,65 @@ py::array create_numpy_array_from_tensor(MNN::Tensor* tensor);
     #define UNLIKELY(expr) (expr)
 #endif
 
-void convert_vector_fp32_to_fp16_corrected(uint16_t* dst, const float* src, size_t size);
+void convert_vector_fp32_to_fp16(uint16_t* dst, const float* src, size_t size);
 void convert_vector_fp16_to_fp32(float* dst, const uint16_t* src, size_t size);
 void convert_vector_int64_to_int32(int32_t* dst, const int64_t* src, ssize_t size);
 void convert_vector_int32_to_int64(int64_t* dst, const int32_t* src, ssize_t size);
+
+#include <vector>
+#include <cstdlib>  // For std::aligned_alloc and std::free
+#include <memory>   // For std::assume_aligned (optional, for compiler hints)
+#include <new>      // std::bad_alloc
+
+template <typename T, std::size_t Alignment = 16>
+struct aligned_allocator {
+    using value_type = T;
+    using pointer = T*;
+    using const_pointer = const T*;
+    using reference = T&;
+    using const_reference = const T&;
+    using size_type = std::size_t;
+    using difference_type = std::ptrdiff_t;
+
+    template <typename U>
+    struct rebind {
+        using other = aligned_allocator<U, Alignment>;
+    };
+
+    aligned_allocator() noexcept = default;
+
+    template <typename U>
+    constexpr aligned_allocator(const aligned_allocator<U, Alignment>&) noexcept {}
+
+    // Required: Full allocate signature (hint ignored here, but present for compliance)
+    pointer allocate(size_type n, const_pointer hint = pointer()) {
+        if (n == 0) return nullptr;
+        if (size_type(-1) / sizeof(T) < n) {
+            throw std::bad_alloc{};
+        }
+        void* p = std::aligned_alloc(Alignment, n * sizeof(T));
+        if (!p) throw std::bad_alloc{};
+        return static_cast<pointer>(p);
+    }
+
+    void deallocate(pointer p, size_type n) noexcept {
+        std::free(p);
+    }
+
+    // Optional but recommended: Use allocator_traits defaults for construct/destroy
+    template <typename U, typename... Args>
+    void construct(U* p, Args&&... args) {
+        static_assert(sizeof(U) == sizeof(T), "Mismatched types in construct");
+        ::new (static_cast<void*>(p)) U(std::forward<Args>(args)...);
+    }
+
+    template <typename U>
+    void destroy(U* p) {
+        p->~U();
+    }
+
+    // Required for move/copy propagation
+    using propagate_on_container_move_assignment = std::true_type;
+};
+
+using AlignedVec = std::vector<uint8_t, aligned_allocator<uint8_t, 16>>;

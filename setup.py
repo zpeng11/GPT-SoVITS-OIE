@@ -192,14 +192,14 @@ def get_build_ext():
             import shutil
 
             # URL for ONNX Runtime Linux x64 package
-            url = "https://github.com/microsoft/onnxruntime/releases/download/v1.23.1/onnxruntime-linux-x64-1.23.1.tgz"
+            url = "https://github.com/microsoft/onnxruntime/releases/download/v1.22.0/onnxruntime-linux-x64-1.22.0.tgz"
 
             # Target directory in extern/onnxruntime
             self.onnxruntime_target_dir = os.path.join(os.path.dirname(__file__), 'extern', 'onnxruntime')
 
             # Remove existing directory if it exists
-            if os.path.exists(self.onnxruntime_target_dir):
-                shutil.rmtree(self.onnxruntime_target_dir)
+            if os.path.exists(self.onnxruntime_target_dir) and os.path.exists(os.path.join(self.onnxruntime_target_dir, 'lib', 'libonnxruntime.so')):
+                return  # 已存在则跳过下载解压
 
             # Create parent directory if it doesn't exist
             os.makedirs(os.path.dirname(self.onnxruntime_target_dir), exist_ok=True)

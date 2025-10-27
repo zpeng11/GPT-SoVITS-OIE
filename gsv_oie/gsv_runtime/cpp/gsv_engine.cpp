@@ -19,11 +19,13 @@ namespace py = pybind11;
 constexpr int PREFILL_THREAD_NUM = 0; // 0 means using default thread number
 constexpr int STEP_DECODE_THREAD_NUM = 0; // 1 is usually enough for step decode
 constexpr int HEAD_NUM = 24;
-constexpr int KV_CACHE_PREPARED_LENGTH = 512;
+constexpr int KV_CACHE_PREPARED_LENGTH = 640;
+constexpr int DECODE_DIMENSION = 512;
 constexpr int MNN_CPU_NUM_THREAD = 8;
 #define CPP_PRINT(msg) py::print("[C++] " + std::string(msg))
 using OrtValueShapeType = std::vector<int64_t>;
-
+static Ort::AllocatorWithDefaultOptions default_allocator;
+static Ort::MemoryInfo pre_allocated_memory_info("Cpu", OrtArenaAllocator, 0, OrtMemTypeDefault);
 
 class GSVEngine : NonCopyable {
     public:
@@ -37,13 +39,42 @@ class GSVEngine : NonCopyable {
         CPP_PRINT("  FSDec path: " + fsdec_path);
         CPP_PRINT("  SDec path: " + sdec_path);
         CPP_PRINT("  SoVITS path: " + sovits_path);
-        // fsdec_engine_ = std::make_shared<MNNInferenceEngine>(fsdec_path, {});
         use_gpu_ = use_gpu;
         use_npu_ = use_npu;
         quantized_ = quantized;
         fsdec_path_ = fsdec_path;
         sdec_path_ = sdec_path;
         sovits_path_ = sovits_path;
+
+        if(!quantized_){ //kv cache using fp16 only when not quantized
+            cache_element_size_ = sizeof(uint16_t);
+            argument_element_size_ = sizeof(uint16_t);
+            fsdec_engine_ = std::make_shared<MNNInferenceEngineInterpreter>(fsdec_path_);
+        }
+        else{
+            cache_element_size_ = sizeof(uint8_t);
+            argument_element_size_ = sizeof(float);
+        }
+        for(int i = 0; i < HEAD_NUM; ++i){
+            k_cache_.emplace_back(AlignedVec(KV_CACHE_PREPARED_LENGTH * 1 * DECODE_DIMENSION * cache_element_size_));
+            v_cache_.emplace_back(AlignedVec(KV_CACHE_PREPARED_LENGTH * 1 * DECODE_DIMENSION * cache_element_size_));
+        }
+        y_emb_cache_ = AlignedVec(1 * KV_CACHE_PREPARED_LENGTH * DECODE_DIMENSION * cache_element_size_);
+
+        Ort::Env env(ORT_LOGGING_LEVEL_WARNING, "T2SOnnxCPURuntime");
+        Ort::SessionOptions session_options;
+        session_options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);
+        session_options.SetIntraOpNumThreads(STEP_DECODE_THREAD_NUM);
+        session_options.SetInterOpNumThreads(STEP_DECODE_THREAD_NUM);
+        sdec_session_ = std::make_shared<Ort::Session>(env, sdec_path.c_str(), session_options);
+        for(const auto& name : sdec_session_->GetInputNames()) {
+            sdec_input_names_.push_back(name);
+            // CPP_PRINT("SDec Input Name: " + name);
+        }
+        for(const auto& name : sdec_session_->GetOutputNames()) {
+            sdec_output_names_.push_back(name);
+            // CPP_PRINT("SDec Output Name: " + name);
+        }
     }
     ~GSVEngine(){
         CPP_PRINT("GSVEngine destroyed");
@@ -55,40 +86,38 @@ class GSVEngine : NonCopyable {
         CPP_PRINT("Received norm_text: " + norm_text);
 
         check_dict_key(ref_dict, "phones");
-        py::array encoder_ref_seq;
-        if(!quantized_){
-            encoder_ref_seq = ref_dict["phones"].cast<py::array_t<int32_t, py::array::c_style | py::array::forcecast>>();
-        }
-        else{
-            encoder_ref_seq = ref_dict["phones"].cast<py::array_t<int64_t, py::array::c_style | py::array::forcecast>>();
-        }
+        const py::array encoder_ref_seq = ref_dict["phones"].cast<py::array>();
+
         check_dict_key(ref_dict, "bert_features");
-        py::array encoder_ref_bert = ref_dict["bert_features"].cast<py::array_t<float, py::array::c_style | py::array::forcecast>>();
+        const py::array encoder_ref_bert = ref_dict["bert_features"].cast<py::array>();
         check_dict_key(ref_dict, "hubert_ssl_output");
-        py::array encoder_ssl_content = ref_dict["hubert_ssl_output"].cast<py::array_t<float, py::array::c_style | py::array::forcecast>>();
+        const py::array encoder_ssl_content = ref_dict["hubert_ssl_output"].cast<py::array>();
 
         check_dict_key(text_input, "phones");
-        py::array encoder_text_seq;
-        if(!quantized_){
-            encoder_text_seq = text_input["phones"].cast<py::array_t<int32_t, py::array::c_style | py::array::forcecast>>();
-        }
-        else{
-            encoder_text_seq = text_input["phones"].cast<py::array_t<int64_t, py::array::c_style | py::array::forcecast>>();
-        }
+        const py::array encoder_text_seq = text_input["phones"].cast<py::array>();
         check_dict_key(text_input, "bert_features");
-        py::array encoder_text_bert = text_input["bert_features"].cast<py::array_t<float, py::array::c_style | py::array::forcecast>>();
+        const py::array encoder_text_bert = text_input["bert_features"].cast<py::array>();
 
         check_dict_key(sampling_params, "top_k");
-        int top_k = sampling_params["top_k"].cast<int>();
+        top_k_ = sampling_params["top_k"].cast<int64_t>();
         check_dict_key(sampling_params, "temperature");
-        float temperature = sampling_params["temperature"].cast<float>();
+        temperature_ = sampling_params["temperature"].cast<float>();
         check_dict_key(sampling_params, "repeat_penalty");
-        float repeat_penalty = sampling_params["repeat_penalty"].cast<float>();
+        repeat_penalty_ = sampling_params["repeat_penalty"].cast<float>();
 
-        if(!fsdec_engine_){
-            fsdec_engine_ = std::make_shared<MNNInferenceEngineInterpreter>(fsdec_path_);
+        iteration_ = 0;
+        kv_cache_seq_init_len_ = static_cast<int>(encoder_ref_seq.shape(1) + encoder_text_seq.shape(1) + (encoder_ssl_content.shape(2)/2));
+        y_init_len_ = static_cast<int>(encoder_ssl_content.shape(2) / 2);
+
+        if(!quantized_)
+            fsdec_infer(encoder_ref_seq, encoder_ref_bert, encoder_ssl_content, encoder_text_seq, encoder_text_bert);
+
+        while (true){
+            if(sdec_infer() || iteration_ >= 200){
+                break;
+            }
         }
-        fsdec_infer(encoder_ref_seq, encoder_ref_bert, encoder_ssl_content, encoder_text_seq, encoder_text_bert);
+        CPP_PRINT("Inference completed, total iterations: " +  std::to_string(iteration_));
         // Dummy output for illustration
         std::vector<float> output_data = {0.0f, 1.0f, 2.0f};
         return py::array_t<float>(output_data.size(), output_data.data());
@@ -107,23 +136,196 @@ class GSVEngine : NonCopyable {
             {"encoder_text_seq", &encoder_text_seq},
             {"encoder_text_bert", &encoder_text_bert}
         };
+        // Call the inference engine
         auto output_map = fsdec_engine_->infer_tensor(input_map);
-        // for(auto item : output_map){
-        //     const auto name = item.first;
-        //     auto tensor_guard = std::move(item.second);
-        //     CPP_PRINT("FSDec Output Tensor Name: " + name);
-        //     CPP_PRINT("FSDec Output Tensor Shape: " + shape_vector_to_string(tensor_guard->tensor()->shape()));
-        // }
+
+        // Process output tensors y
+        auto y_shape = to_ort_shape_vector(output_map["y"]->shape());
+        y_ = Ort::Value::CreateTensor<int64_t>(default_allocator, y_shape.data(), y_shape.size());
+
+        convert_vector_int32_to_int64(
+            y_.GetTensorMutableData<int64_t>(),
+            reinterpret_cast<const int32_t*>(output_map["y"]->ptr()),
+            y_shape[0] * y_shape[1]);
+
+        // Process output tensor y_emb
+        auto y_emb_shape = to_ort_shape_vector(output_map["y_emb"]->shape());
+        convert_vector_fp32_to_fp16(
+            reinterpret_cast<uint16_t*>(y_emb_cache_.data()),
+            reinterpret_cast<const float*>(output_map["y_emb"]->ptr()),
+            y_emb_shape[0] * y_emb_shape[1] * y_emb_shape[2]);
+
+        for(int i = 0; i < HEAD_NUM; ++i){
+            // Process k_cache
+            std::string k_cache_name = "present_k_layer_" + std::to_string(i);
+            auto k_cache_shape = to_ort_shape_vector(output_map[k_cache_name]->shape());
+            convert_vector_fp32_to_fp16(
+                reinterpret_cast<uint16_t*>(k_cache_[i].data()),
+                reinterpret_cast<const float*>(output_map[k_cache_name]->ptr()),
+                k_cache_shape[0] * k_cache_shape[1] * k_cache_shape[2]);
+            // Process v_cache
+            std::string v_cache_name = "present_v_layer_" + std::to_string(i);
+            auto v_cache_shape = to_ort_shape_vector(output_map[v_cache_name]->shape());
+            convert_vector_fp32_to_fp16(
+                reinterpret_cast<uint16_t*>(v_cache_[i].data()),
+                reinterpret_cast<const float*>(output_map[v_cache_name]->ptr()),
+                v_cache_shape[0] * v_cache_shape[1] * v_cache_shape[2]);
+        }
+        // Process output tensor y_emb, needs conversion from fp32 to fp16
+    }
+    
+    bool sdec_infer(){
+        assert(k_cache_.size() == HEAD_NUM && v_cache_.size() == HEAD_NUM);
+        assert(y_.IsTensor());
+        assert(sdec_session_ != nullptr);
+        int current_y_len = y_init_len_ + iteration_ + 1;
+        int current_y_emb_len = y_init_len_ + iteration_;
+        int current_kv_cache_len = kv_cache_seq_init_len_ + iteration_;
+        int kv_cache_current_size = current_kv_cache_len * 1 * 512;
+        int y_emb_current_size = 1 * current_y_emb_len * 512;
+
+         // CPU memory info
+        Ort::IoBinding sdec_iobinding(*sdec_session_);
+
+        // Bind inputs
+        sdec_iobinding.BindInput("iy", y_);
+        OrtValueShapeType y_emb_shape = {1, current_y_emb_len, 512};
+
+        Ort::Value y_emb = Ort::Value::CreateTensor(pre_allocated_memory_info, 
+                                                    static_cast<void*>(y_emb_cache_.data()), 
+                                                    y_emb_current_size * cache_element_size_, 
+                                                    y_emb_shape.data(), 
+                                                    y_emb_shape.size(),
+                                                    ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT16);
+        sdec_iobinding.BindInput("iy_emb", y_emb);
+
+        uint16_t temperature_data_fp16 = fp16_ieee_from_fp32_value(temperature_);
+        OrtValueShapeType temperature_shape = {1};
+        Ort::Value temperature_tensor = Ort::Value::CreateTensor(pre_allocated_memory_info, 
+                                                                reinterpret_cast<void*>(&temperature_data_fp16), 
+                                                                argument_element_size_, 
+                                                                temperature_shape.data(), 
+                                                                temperature_shape.size(),
+                                                                ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT16);
+        sdec_iobinding.BindInput("temperature", temperature_tensor);
+
+        OrtValueShapeType top_k_shape = {1};
+        Ort::Value top_k_tensor = Ort::Value::CreateTensor<int64_t>(pre_allocated_memory_info, 
+                                                                    &top_k_, 
+                                                                    1, 
+                                                                    top_k_shape.data(), 
+                                                                    top_k_shape.size());
+        sdec_iobinding.BindInput("top_k", top_k_tensor);
+
+        uint16_t repeat_penalty_data_fp16 = fp16_ieee_from_fp32_value(repeat_penalty_);
+        OrtValueShapeType repeat_penalty_shape = {1};
+        Ort::Value repeat_penalty_tensor = Ort::Value::CreateTensor(pre_allocated_memory_info, 
+                                                                    reinterpret_cast<void*>(&repeat_penalty_data_fp16), 
+                                                                    argument_element_size_, 
+                                                                    repeat_penalty_shape.data(), 
+                                                                    repeat_penalty_shape.size(),
+                                                                    ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT16);
+        sdec_iobinding.BindInput("repeat_penalty", repeat_penalty_tensor);
+
+        OrtValueShapeType kv_cache_shape = {current_kv_cache_len, 1, 512};
+        for(int i = 0; i < HEAD_NUM; ++i){
+            Ort::Value k_tensor = Ort::Value::CreateTensor(pre_allocated_memory_info, 
+                                                        reinterpret_cast<void*>(k_cache_[i].data()), 
+                                                        kv_cache_current_size * cache_element_size_, 
+                                                        kv_cache_shape.data(), 
+                                                        kv_cache_shape.size(),
+                                                        ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT16);
+            Ort::Value v_tensor = Ort::Value::CreateTensor(pre_allocated_memory_info, 
+                                                        reinterpret_cast<void*>(v_cache_[i].data()), 
+                                                        kv_cache_current_size * cache_element_size_, 
+                                                        kv_cache_shape.data(), 
+                                                        kv_cache_shape.size(),
+                                                        ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT16);
+            sdec_iobinding.BindInput(sdec_input_names_[5 + i * 2].c_str(), k_tensor);
+            sdec_iobinding.BindInput(sdec_input_names_[5 + i * 2 + 1].c_str(), v_tensor);
+            // CPP_PRINT("Debug data:"+ std::to_string(k_cache_[i][kv_cache_current_size * cache_element_size_ -1])+","+ std::to_string(v_cache_[i][kv_cache_current_size * cache_element_size_ -1]));
+            // CPP_PRINT("Bound k_cache and v_cache for head " + std::to_string(i)+ ":"+sdec_input_names_[5 + i * 2]+" , "+sdec_input_names_[5 + i * 2 + 1]);
+        }
+
+        // Prepare and bind outputs
+        OrtValueShapeType y_new_shape = {1, current_y_len + 1};
+        Ort::Value y_new = Ort::Value::CreateTensor<int64_t>(default_allocator, y_new_shape.data(), y_new_shape.size());
+        sdec_iobinding.BindOutput("y", y_new);
+
+        bool stop_condition_data = false;
+        Ort::Value stop_condition_tensor = Ort::Value::CreateTensor<bool>(pre_allocated_memory_info, &stop_condition_data, 1, nullptr, 0);
+        sdec_iobinding.BindOutput("stop_condition_tensor", stop_condition_tensor);
+
+        OrtValueShapeType y_emb_new_shape = {1, 1, 512};
+        int y_emb_increased_size = 1 * 1 * 512;
+        void* y_emb_out_ptr = reinterpret_cast<void*>(y_emb_cache_.data() + y_emb_current_size * cache_element_size_);
+        Ort::Value y_emb_new = Ort::Value::CreateTensor(pre_allocated_memory_info, 
+                                                        y_emb_out_ptr, 
+                                                        y_emb_increased_size * cache_element_size_,
+                                                        y_emb_new_shape.data(),
+                                                        y_emb_new_shape.size(),
+                                                        ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT16);
+        sdec_iobinding.BindOutput("increased_y_emb", y_emb_new);
+
+        OrtValueShapeType kv_cache_shape_new = {1, 1, 512};
+        int kv_cache_increased_size = 1 * 1 * 512;
+        for(int i = 0; i < HEAD_NUM; ++i){
+            void* k_cache_out_ptr = reinterpret_cast<void*>(k_cache_[i].data() + kv_cache_current_size * cache_element_size_);
+            void* v_cache_out_ptr = reinterpret_cast<void*>(v_cache_[i].data() + kv_cache_current_size * cache_element_size_);
+            Ort::Value k_tensor = Ort::Value::CreateTensor(pre_allocated_memory_info, 
+                                                        k_cache_out_ptr, 
+                                                        kv_cache_increased_size * cache_element_size_, 
+                                                        kv_cache_shape_new.data(), 
+                                                        kv_cache_shape_new.size(),
+                                                        ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT16);
+            Ort::Value v_tensor = Ort::Value::CreateTensor(pre_allocated_memory_info, 
+                                                        v_cache_out_ptr, 
+                                                        kv_cache_increased_size * cache_element_size_, 
+                                                        kv_cache_shape_new.data(), 
+                                                        kv_cache_shape_new.size(), 
+                                                        ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT16);
+            sdec_iobinding.BindOutput(sdec_output_names_[3 + i * 2].c_str(), k_tensor);
+            sdec_iobinding.BindOutput(sdec_output_names_[3 + i * 2 + 1].c_str(), v_tensor);
+        }
+        
+        // CPP_PRINT("Running stage decoder...");
+        sdec_session_->Run(Ort::RunOptions{}, sdec_iobinding);
+        // CPP_PRINT("Stage decoder run completed.");
+        sdec_iobinding.SynchronizeOutputs();
+
+        std::swap(y_, y_new);
+        iteration_ += 1;
+
+        return stop_condition_data;
     }
 
     private:
     std::shared_ptr<MNNInferenceEngineInterpreter> fsdec_engine_;
+    std::shared_ptr<Ort::Session> sdec_session_;
     bool use_gpu_ = false;
     bool use_npu_ = false;
     bool quantized_ = false;
+    int cache_element_size_ = 0;
+    int argument_element_size_ = 0;
     std::string fsdec_path_;
     std::string sdec_path_;
     std::string sovits_path_;
+
+    std::vector<AlignedVec> k_cache_;
+    std::vector<AlignedVec> v_cache_;
+    AlignedVec y_emb_cache_;
+    Ort::Value y_;
+
+    int64_t top_k_ = 0;
+    float temperature_ = 0.0f;
+    float repeat_penalty_ = 0.0f;
+
+    int iteration_ = 0;
+    int kv_cache_seq_init_len_ = 0;
+    int y_init_len_ = 0;
+
+    std::vector<std::string> sdec_input_names_;
+    std::vector<std::string> sdec_output_names_;
 };
 
 
