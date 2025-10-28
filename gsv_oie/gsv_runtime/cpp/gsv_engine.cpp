@@ -28,12 +28,14 @@ static Ort::AllocatorWithDefaultOptions default_allocator;
 static Ort::MemoryInfo pre_allocated_memory_info("Cpu", OrtArenaAllocator, 0, OrtMemTypeDefault);
 static Ort::Env global_env(ORT_LOGGING_LEVEL_WARNING, "Global");
 static Ort::RunOptions global_run_options;
+static Ort::SessionOptions global_session_options;
 
 class GSVEngine : NonCopyable {
     public:
     GSVEngine(const std::string fsdec_path,
               const std::string sdec_path,
               const std::string sovits_path,
+              bool sv_emb = false,
               bool use_gpu = false,
               bool use_npu = false,
               bool quantized = false){
@@ -41,6 +43,7 @@ class GSVEngine : NonCopyable {
         CPP_PRINT("  FSDec path: " + fsdec_path);
         CPP_PRINT("  SDec path: " + sdec_path);
         CPP_PRINT("  SoVITS path: " + sovits_path);
+        sv_emb_ = sv_emb;
         use_gpu_ = use_gpu;
         use_npu_ = use_npu;
         quantized_ = quantized;
@@ -62,20 +65,15 @@ class GSVEngine : NonCopyable {
             v_cache_.emplace_back(AlignedVec(KV_CACHE_PREPARED_LENGTH * 1 * DECODE_DIMENSION * cache_element_size_));
         }
         y_emb_cache_ = AlignedVec(1 * KV_CACHE_PREPARED_LENGTH * DECODE_DIMENSION * cache_element_size_);
+        
+        global_session_options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);
+        global_session_options.SetIntraOpNumThreads(STEP_DECODE_THREAD_NUM);
+        global_session_options.SetInterOpNumThreads(STEP_DECODE_THREAD_NUM);
+        sdec_session_ = std::make_shared<Ort::Session>(global_env, sdec_path.c_str(), global_session_options);
+        for(const auto& name : sdec_session_->GetInputNames()) sdec_input_names_.push_back(name);
+        for(const auto& name : sdec_session_->GetOutputNames()) sdec_output_names_.push_back(name);
 
-        Ort::SessionOptions session_options;
-        session_options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);
-        session_options.SetIntraOpNumThreads(STEP_DECODE_THREAD_NUM);
-        session_options.SetInterOpNumThreads(STEP_DECODE_THREAD_NUM);
-        sdec_session_ = std::make_shared<Ort::Session>(global_env, sdec_path.c_str(), session_options);
-        for(const auto& name : sdec_session_->GetInputNames()) {
-            sdec_input_names_.push_back(name);
-            // CPP_PRINT("SDec Input Name: " + name);
-        }
-        for(const auto& name : sdec_session_->GetOutputNames()) {
-            sdec_output_names_.push_back(name);
-            // CPP_PRINT("SDec Output Name: " + name);
-        }
+        sovits_engine_ = std::make_shared<MNNInferenceEngineInterpreter>(sovits_path_);
     }
     ~GSVEngine(){
         CPP_PRINT("GSVEngine destroyed");
@@ -99,6 +97,12 @@ class GSVEngine : NonCopyable {
         check_dict_key(text_input, "bert_features");
         const py::array encoder_text_bert = text_input["bert_features"].cast<py::array>();
 
+        check_dict_key(ref_dict, "spectrum");
+        const py::array spectrum = ref_dict["spectrum"].cast<py::array>();
+
+        if(sv_emb_) check_dict_key(ref_dict, "sv_emb");
+        const py::array sv_emb = sv_emb_ ? ref_dict["sv_emb"].cast<py::array>() : py::array();
+
         check_dict_key(sampling_params, "top_k");
         top_k_ = sampling_params["top_k"].cast<int64_t>();
         check_dict_key(sampling_params, "temperature");
@@ -119,9 +123,10 @@ class GSVEngine : NonCopyable {
             }
         }
         CPP_PRINT("Inference completed, total iterations: " +  std::to_string(iteration_));
-        // Dummy output for illustration
-        std::vector<float> output_data = {0.0f, 1.0f, 2.0f};
-        return py::array_t<float>(output_data.size(), output_data.data());
+        CPP_PRINT("Y shape:" + std::to_string(y_.GetTensorTypeAndShapeInfo().GetShape()[0]) + "," +
+                  std::to_string(y_.GetTensorTypeAndShapeInfo().GetShape()[1]));
+
+        return infer_sovits(text_input, spectrum, sv_emb);
     }
 
     void fsdec_infer(const py::array&encoder_ref_seq, 
@@ -194,10 +199,10 @@ class GSVEngine : NonCopyable {
 
         Ort::Value y_emb = Ort::Value::CreateTensor(pre_allocated_memory_info, 
                                                     static_cast<void*>(y_emb_cache_.data()), 
-                                                    y_emb_current_size * cache_element_size_, 
+                                                    y_emb_current_size * argument_element_size_, 
                                                     y_emb_shape.data(), 
                                                     y_emb_shape.size(),
-                                                    ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT16);
+                                                    quantized_ ? ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT : ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT16);
         sdec_iobinding.BindInput("iy_emb", y_emb);
 
         uint16_t temperature_data_fp16 = fp16_ieee_from_fp32_value(temperature_);
@@ -207,7 +212,7 @@ class GSVEngine : NonCopyable {
                                                                 argument_element_size_, 
                                                                 temperature_shape.data(), 
                                                                 temperature_shape.size(),
-                                                                ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT16);
+                                                                quantized_ ? ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT : ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT16);
         sdec_iobinding.BindInput("temperature", temperature_tensor);
 
         OrtValueShapeType top_k_shape = {1};
@@ -225,7 +230,7 @@ class GSVEngine : NonCopyable {
                                                                     argument_element_size_, 
                                                                     repeat_penalty_shape.data(), 
                                                                     repeat_penalty_shape.size(),
-                                                                    ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT16);
+                                                                    quantized_ ? ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT : ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT16);
         sdec_iobinding.BindInput("repeat_penalty", repeat_penalty_tensor);
 
         OrtValueShapeType kv_cache_shape = {current_kv_cache_len, 1, 512};
@@ -235,13 +240,13 @@ class GSVEngine : NonCopyable {
                                                         kv_cache_current_size * cache_element_size_, 
                                                         kv_cache_shape.data(), 
                                                         kv_cache_shape.size(),
-                                                        ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT16);
+                                                        quantized_ ? ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT8 : ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT16);
             Ort::Value v_tensor = Ort::Value::CreateTensor(pre_allocated_memory_info, 
                                                         reinterpret_cast<void*>(v_cache_[i].data()), 
                                                         kv_cache_current_size * cache_element_size_, 
                                                         kv_cache_shape.data(), 
                                                         kv_cache_shape.size(),
-                                                        ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT16);
+                                                        quantized_ ? ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT8 : ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT16);
             sdec_iobinding.BindInput(sdec_input_names_[5 + i * 2].c_str(), k_tensor);
             sdec_iobinding.BindInput(sdec_input_names_[5 + i * 2 + 1].c_str(), v_tensor);
             // CPP_PRINT("Debug data:"+ std::to_string(k_cache_[i][kv_cache_current_size * cache_element_size_ -1])+","+ std::to_string(v_cache_[i][kv_cache_current_size * cache_element_size_ -1]));
@@ -262,10 +267,10 @@ class GSVEngine : NonCopyable {
         void* y_emb_out_ptr = reinterpret_cast<void*>(y_emb_cache_.data() + y_emb_current_size * cache_element_size_);
         Ort::Value y_emb_new = Ort::Value::CreateTensor(pre_allocated_memory_info, 
                                                         y_emb_out_ptr, 
-                                                        y_emb_increased_size * cache_element_size_,
+                                                        y_emb_increased_size * argument_element_size_,
                                                         y_emb_new_shape.data(),
                                                         y_emb_new_shape.size(),
-                                                        ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT16);
+                                                        quantized_ ? ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT : ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT16);
         sdec_iobinding.BindOutput("increased_y_emb", y_emb_new);
 
         OrtValueShapeType kv_cache_shape_new = {1, 1, 512};
@@ -278,13 +283,13 @@ class GSVEngine : NonCopyable {
                                                         kv_cache_increased_size * cache_element_size_, 
                                                         kv_cache_shape_new.data(), 
                                                         kv_cache_shape_new.size(),
-                                                        ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT16);
+                                                        quantized_ ? ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT8 : ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT16);
             Ort::Value v_tensor = Ort::Value::CreateTensor(pre_allocated_memory_info, 
                                                         v_cache_out_ptr, 
                                                         kv_cache_increased_size * cache_element_size_, 
                                                         kv_cache_shape_new.data(), 
                                                         kv_cache_shape_new.size(), 
-                                                        ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT16);
+                                                        quantized_ ? ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT8 : ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT16);
             sdec_iobinding.BindOutput(sdec_output_names_[3 + i * 2].c_str(), k_tensor);
             sdec_iobinding.BindOutput(sdec_output_names_[3 + i * 2 + 1].c_str(), v_tensor);
         }
@@ -300,9 +305,29 @@ class GSVEngine : NonCopyable {
         return stop_condition_data;
     }
 
+    py::array_t<float> infer_sovits(const py::array& input_text_phones,
+                                    const py::array& spectrum,
+                                    const py::array& sv_emb) {
+        CPP_PRINT("Sovits inference not implemented yet.");
+        CPP_PRINT("Input text phones is int64t:" + std::to_string(input_text_phones.dtype().itemsize() == sizeof(int64_t)));
+        // Dummy output for illustration
+        auto input_names = sovits_engine_->get_input_names();
+        for (const auto& name : input_names) {
+            CPP_PRINT("Sovits input name: " + name);
+        }
+        auto output_names = sovits_engine_->get_output_names();
+        for (const auto& name : output_names) {
+            CPP_PRINT("Sovits output name: " + name);
+        }
+        std::vector<float> output_data = {0.0f, 1.0f, 2.0f};
+        return py::array_t<float>(output_data.size(), output_data.data());
+    }
+
     private:
     std::shared_ptr<MNNInferenceEngineInterpreter> fsdec_engine_;
     std::shared_ptr<Ort::Session> sdec_session_;
+    std::shared_ptr<MNNInferenceEngineInterpreter> sovits_engine_;
+    bool sv_emb_ = false;
     bool use_gpu_ = false;
     bool use_npu_ = false;
     bool quantized_ = false;
@@ -353,10 +378,11 @@ PYBIND11_MODULE(gsv_engine, m) {
              "Execute inference with input dictionary, returns output dictionary");
     
     py::class_<GSVEngine>(m, "GSVEngine")
-        .def(py::init<const std::string&, const std::string&, const std::string&, bool, bool, bool>(),
+        .def(py::init<const std::string&, const std::string&, const std::string&, bool, bool, bool, bool>(),
              py::arg("fsdec_path"),
              py::arg("sdec_path"),
              py::arg("sovits_path"),
+             py::arg("sv_emb") = false,
              py::arg("use_gpu") = false,
              py::arg("use_npu") = false,
              py::arg("quantized") = false)

@@ -22,6 +22,9 @@ public:
 
     std::map<std::string, std::shared_ptr<TensorDataGuard>> infer_tensor(const std::map<std::string, const py::array *>& input_map);
 
+    std::vector<std::string> get_input_names();
+    std::vector<std::string> get_output_names();
+
     ~MNNInferenceEngineInterpreter();
 
 private:

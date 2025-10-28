@@ -83,6 +83,7 @@ class GSVRuntime:
             self.fsdec_path,
             self.sdec_path,
             self.sovits_path,
+            self.is_v2pro,
             self.use_gpu,
             self.use_npu,
             self.is_quantized

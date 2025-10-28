@@ -25,6 +25,24 @@ MNNInferenceEngineInterpreter::MNNInferenceEngineInterpreter(const std::string m
     session_ = interpreter_->createSession(global_config, runtime_info);
 }
 
+std::vector<std::string> MNNInferenceEngineInterpreter::get_input_names(){
+    std::vector<std::string> input_names;
+    auto input_tensors = interpreter_->getSessionInputAll(session_);
+    for(auto item : input_tensors){
+        input_names.push_back(item.first);
+    }
+    return input_names;
+}
+
+std::vector<std::string> MNNInferenceEngineInterpreter::get_output_names(){
+    std::vector<std::string> output_names;
+    auto output_tensors = interpreter_->getSessionOutputAll(session_);
+    for(auto item : output_tensors){
+        output_names.push_back(item.first);
+    }
+    return output_names;
+}
+
 py::dict MNNInferenceEngineInterpreter::infer(const py::dict& input_dict){
     auto input_tensors = interpreter_->getSessionInputAll(session_);
     for(auto item : input_tensors){
