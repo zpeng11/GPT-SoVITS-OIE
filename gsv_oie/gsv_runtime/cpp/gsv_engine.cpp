@@ -26,6 +26,8 @@ constexpr int MNN_CPU_NUM_THREAD = 8;
 using OrtValueShapeType = std::vector<int64_t>;
 static Ort::AllocatorWithDefaultOptions default_allocator;
 static Ort::MemoryInfo pre_allocated_memory_info("Cpu", OrtArenaAllocator, 0, OrtMemTypeDefault);
+static Ort::Env global_env(ORT_LOGGING_LEVEL_WARNING, "Global");
+static Ort::RunOptions global_run_options;
 
 class GSVEngine : NonCopyable {
     public:
@@ -61,12 +63,11 @@ class GSVEngine : NonCopyable {
         }
         y_emb_cache_ = AlignedVec(1 * KV_CACHE_PREPARED_LENGTH * DECODE_DIMENSION * cache_element_size_);
 
-        Ort::Env env(ORT_LOGGING_LEVEL_WARNING, "T2SOnnxCPURuntime");
         Ort::SessionOptions session_options;
         session_options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);
         session_options.SetIntraOpNumThreads(STEP_DECODE_THREAD_NUM);
         session_options.SetInterOpNumThreads(STEP_DECODE_THREAD_NUM);
-        sdec_session_ = std::make_shared<Ort::Session>(env, sdec_path.c_str(), session_options);
+        sdec_session_ = std::make_shared<Ort::Session>(global_env, sdec_path.c_str(), session_options);
         for(const auto& name : sdec_session_->GetInputNames()) {
             sdec_input_names_.push_back(name);
             // CPP_PRINT("SDec Input Name: " + name);
@@ -289,7 +290,7 @@ class GSVEngine : NonCopyable {
         }
         
         // CPP_PRINT("Running stage decoder...");
-        sdec_session_->Run(Ort::RunOptions{}, sdec_iobinding);
+        sdec_session_->Run(global_run_options, sdec_iobinding);
         // CPP_PRINT("Stage decoder run completed.");
         sdec_iobinding.SynchronizeOutputs();
 

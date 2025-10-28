@@ -192,7 +192,7 @@ def get_build_ext():
             import shutil
 
             # URL for ONNX Runtime Linux x64 package
-            url = "https://github.com/microsoft/onnxruntime/releases/download/v1.22.0/onnxruntime-linux-x64-1.22.0.tgz"
+            url = "https://github.com/microsoft/onnxruntime/releases/download/v1.23.2/onnxruntime-linux-x64-1.23.2.tgz"
 
             # Target directory in extern/onnxruntime
             self.onnxruntime_target_dir = os.path.join(os.path.dirname(__file__), 'extern', 'onnxruntime')
