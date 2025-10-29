@@ -10,7 +10,6 @@
 #include <vector>
 #include <iostream>
 #include <cstdint>
-
 #include "utils.hpp"
 #include "MNNInferenceEngine.h"
 #include "MNNInferenceEngineInterpreter.hpp"
@@ -82,7 +81,7 @@ class GSVEngine : NonCopyable {
     py::array_t<float> infer(const py::dict& ref_dict, const py::dict& text_input, const py::dict& sampling_params) {
         check_dict_key(text_input, "norm_text");
         auto norm_text = text_input["norm_text"].cast<std::string>();
-        CPP_PRINT("Received norm_text: " + norm_text);
+        // CPP_PRINT("Received norm_text: " + norm_text);
 
         check_dict_key(ref_dict, "phones");
         const py::array encoder_ref_seq = ref_dict["phones"].cast<py::array>();
@@ -118,15 +117,17 @@ class GSVEngine : NonCopyable {
             fsdec_infer(encoder_ref_seq, encoder_ref_bert, encoder_ssl_content, encoder_text_seq, encoder_text_bert);
 
         while (true){
-            if(sdec_infer() || iteration_ >= 200){
+            if(sdec_infer() || iteration_ >= (KV_CACHE_PREPARED_LENGTH - kv_cache_seq_init_len_ -1)){
                 break;
             }
         }
-        CPP_PRINT("Inference completed, total iterations: " +  std::to_string(iteration_));
-        CPP_PRINT("Y shape:" + std::to_string(y_.GetTensorTypeAndShapeInfo().GetShape()[0]) + "," +
-                  std::to_string(y_.GetTensorTypeAndShapeInfo().GetShape()[1]));
+        iteration_ -= 1; //last iteration is not used
+        int result_starting_idx = y_.GetTensorTypeAndShapeInfo().GetShape()[1] - 1 - iteration_;
+        py::array y_cropped_array = py::array_t<int64_t>(
+            {1, 1, iteration_},
+            y_.GetTensorMutableData<int64_t>() + result_starting_idx);
 
-        return infer_sovits(text_input, spectrum, sv_emb);
+        return infer_sovits(encoder_text_seq, y_cropped_array, spectrum, sv_emb);
     }
 
     void fsdec_infer(const py::array&encoder_ref_seq, 
@@ -306,21 +307,17 @@ class GSVEngine : NonCopyable {
     }
 
     py::array_t<float> infer_sovits(const py::array& input_text_phones,
+                                    const py::array& y_array,
                                     const py::array& spectrum,
                                     const py::array& sv_emb) {
-        CPP_PRINT("Sovits inference not implemented yet.");
-        CPP_PRINT("Input text phones is int64t:" + std::to_string(input_text_phones.dtype().itemsize() == sizeof(int64_t)));
-        // Dummy output for illustration
-        auto input_names = sovits_engine_->get_input_names();
-        for (const auto& name : input_names) {
-            CPP_PRINT("Sovits input name: " + name);
-        }
-        auto output_names = sovits_engine_->get_output_names();
-        for (const auto& name : output_names) {
-            CPP_PRINT("Sovits output name: " + name);
-        }
-        std::vector<float> output_data = {0.0f, 1.0f, 2.0f};
-        return py::array_t<float>(output_data.size(), output_data.data());
+        auto input_map = std::map<std::string, const py::array *>{
+            {"input_text_phones", &input_text_phones},
+            {"pred_semantic", &y_array},
+            {"spectrum", &spectrum},
+            {"sv_emb", &sv_emb}
+        };
+        auto output_map = sovits_engine_->infer_tensor(input_map);
+        return create_numpy_array_from_tensor(output_map["audio32k"]->tensor());
     }
 
     private:

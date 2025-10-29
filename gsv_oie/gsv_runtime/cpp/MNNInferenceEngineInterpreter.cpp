@@ -6,13 +6,19 @@
 
 #define CPP_PRINT(msg) py::print("[C++] " + std::string(msg))
 constexpr int MNN_CPU_NUM_THREAD = 8;
+struct MNN::BackendConfig global_backend_config{
+    .memory = MNN::BackendConfig::Memory_Low,
+    .power = MNN::BackendConfig::Power_High,
+    .precision = MNN::BackendConfig::Precision_Low,
+    .sharedContext = nullptr
+};
 static MNN::ScheduleConfig global_config{
     .saveTensors = {},
     .type = MNN_FORWARD_AUTO,
     .numThread = MNN_CPU_NUM_THREAD,
     .path = {},
     .backupType = MNN_FORWARD_CPU,
-    .backendConfig = nullptr
+    .backendConfig = &global_backend_config
 };
 
 
