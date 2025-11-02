@@ -388,14 +388,14 @@ void convert_vector_fp32_to_fp16(uint16_t* output, const float* input, size_t si
     if (fp16_enabled) {
         // Hardware Path
         #pragma omp parallel for schedule(static) if(use_parallel)
-        for (size_t block_start = 0; block_start < size; block_start += BLOCK_SIZE) {
-            size_t block_end = std::min(block_start + BLOCK_SIZE, size);
+        for (ssize_t block_start = 0; block_start < static_cast<ssize_t>(size); block_start += BLOCK_SIZE) {
+            size_t block_end = std::min(static_cast<size_t>(block_start) + BLOCK_SIZE, size);
 
-            if (LIKELY(block_start + BLOCK_SIZE + PREFETCH_DIST <= size)) {
+            if (LIKELY(static_cast<size_t>(block_start) + BLOCK_SIZE + PREFETCH_DIST <= size)) {
                 PREFETCH(&input[block_start + BLOCK_SIZE + PREFETCH_DIST]);
             }
 
-            size_t i = block_start;
+            size_t i = static_cast<size_t>(block_start);
             // SIMD loop processes 8 elements at a time
 #if defined(__aarch64__) && defined(__ARM_NEON)
             for (; i + 7 < block_end; i += 8) {
@@ -413,15 +413,15 @@ void convert_vector_fp32_to_fp16(uint16_t* output, const float* input, size_t si
     } else {
         // Software Path
         #pragma omp parallel for schedule(static) if(use_parallel)
-        for (size_t block_start = 0; block_start < size; block_start += BLOCK_SIZE) {
-            size_t block_end = std::min(block_start + BLOCK_SIZE, size);
+        for (ssize_t block_start = 0; block_start < static_cast<ssize_t>(size); block_start += BLOCK_SIZE) {
+            size_t block_end = std::min(static_cast<size_t>(block_start) + BLOCK_SIZE, size);
 
-            if (LIKELY(block_start + BLOCK_SIZE + PREFETCH_DIST <= size)) {
+            if (LIKELY(static_cast<size_t>(block_start) + BLOCK_SIZE + PREFETCH_DIST <= size)) {
                 PREFETCH(&input[block_start + BLOCK_SIZE + PREFETCH_DIST]);
             }
             
             // A simple scalar loop is clearer and avoids the bugs
-            for (size_t i = block_start; i < block_end; ++i) {
+            for (size_t i = static_cast<size_t>(block_start); i < block_end; ++i) {
                 output[i] = fp16_ieee_from_fp32_value(input[i]);
             }
         }
@@ -441,14 +441,14 @@ void convert_vector_fp16_to_fp32(float* output, const uint16_t* input, size_t si
     if (fp16_enabled) {
         // Hardware Path
         #pragma omp parallel for schedule(static) if(use_parallel)
-        for (size_t block_start = 0; block_start < size; block_start += BLOCK_SIZE) {
-            size_t block_end = std::min(block_start + BLOCK_SIZE, size);
+        for (ssize_t block_start = 0; block_start < static_cast<ssize_t>(size); block_start += BLOCK_SIZE) {
+            size_t block_end = std::min(static_cast<size_t>(block_start) + BLOCK_SIZE, size);
 
-            if (LIKELY(block_start + BLOCK_SIZE + PREFETCH_DIST <= size)) {
+            if (LIKELY(static_cast<size_t>(block_start) + BLOCK_SIZE + PREFETCH_DIST <= size)) {
                 PREFETCH(&input[block_start + BLOCK_SIZE + PREFETCH_DIST]);
             }
 
-            size_t i = block_start;
+            size_t i = static_cast<size_t>(block_start);
             // SIMD loop processes 8 elements at a time
 #if defined(__aarch64__) && defined(__ARM_NEON)
             for (; i + 7 < block_end; i += 8) {
@@ -465,22 +465,22 @@ void convert_vector_fp16_to_fp32(float* output, const uint16_t* input, size_t si
 #endif
             // Tail loop to handle remaining elements in the block
             for (; i < block_end; ++i) {
-                output[i] = fp16_ieee_to_fp32_bits(input[i]);
+                output[i] = fp16_ieee_to_fp32_value(input[i]);
             }
         }
     } else {
         // Software Path
         #pragma omp parallel for schedule(static) if(use_parallel)
-        for (size_t block_start = 0; block_start < size; block_start += BLOCK_SIZE) {
-            size_t block_end = std::min(block_start + BLOCK_SIZE, size);
+        for (ssize_t block_start = 0; block_start < static_cast<ssize_t>(size); block_start += BLOCK_SIZE) {
+            size_t block_end = std::min(static_cast<size_t>(block_start) + BLOCK_SIZE, size);
 
-            if (LIKELY(block_start + BLOCK_SIZE + PREFETCH_DIST <= size)) {
+            if (LIKELY(static_cast<size_t>(block_start) + BLOCK_SIZE + PREFETCH_DIST <= size)) {
                 PREFETCH(&input[block_start + BLOCK_SIZE + PREFETCH_DIST]);
             }
             
             // A simple scalar loop is clearer and avoids the bugs
-            for (size_t i = block_start; i < block_end; ++i) {
-                output[i] = fp16_ieee_to_fp32_bits(input[i]);
+            for (size_t i = static_cast<size_t>(block_start); i < block_end; ++i) {
+                output[i] = fp16_ieee_to_fp32_value(input[i]);
             }
         }
     }
