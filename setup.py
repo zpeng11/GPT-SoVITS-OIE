@@ -212,11 +212,11 @@ def get_build_ext():
             os.makedirs(self.mnn_dist_dir, exist_ok=True)
             if IS_UNIX:
                 for file in glob.glob(os.path.join(self.mnn_build_dir, '*MNN.so*')):
-                    subprocess.run(['cp', file, self.mnn_dist_dir])
+                    shutil.copy(file, self.mnn_dist_dir)
                 for file in glob.glob(os.path.join(self.mnn_build_dir, 'express', '*MNN_Express.so*')):
-                    subprocess.run(['cp', file, self.mnn_dist_dir])
+                    shutil.copy(file, self.mnn_dist_dir)
             else:
-                subprocess.run(['cp', os.path.join(self.mnn_build_dir,'Debug','MNN.dll'), self.mnn_dist_dir])
+                shutil.copy(os.path.join(self.mnn_build_dir,'Debug','MNN.dll'), self.mnn_dist_dir)
 
         def build_tokenizers_cpp(self):
             self.tokenizers_cpp_src_dir = os.path.join(os.path.dirname(__file__), 'extern', 'tokenizers-cpp')
