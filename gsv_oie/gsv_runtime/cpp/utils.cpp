@@ -26,6 +26,12 @@
     #define USE_OPENMP 0
 #endif
 
+#ifdef _MSC_VER
+    #define PREFETCH(addr) _mm_prefetch((const char*)(addr), _MM_HINT_T0)
+#else
+    #define PREFETCH(addr) __builtin_prefetch(addr, 0, 3)
+#endif
+
 #define CPP_PRINT(msg) py::print("[C++] " + std::string(msg))
 
 std::vector<int> get_shape_from_numpy_array(const py::array& array) {
@@ -202,7 +208,7 @@ void process_block_int32_to_int64(int64_t* dst, const int32_t* src, ssize_t bloc
     ssize_t i = 0;
 
     for (; i + step <= block_size; i += step) {
-        _mm_prefetch(reinterpret_cast<const char*>(src + i + 32), _MM_HINT_T0);
+        PREFETCH(reinterpret_cast<const char*>(src + i + 32));
 
         __m128i v0 = _mm_loadu_si128(reinterpret_cast<const __m128i*>(src + i));
         __m128i lo64_0 = _mm_unpacklo_epi32(v0, _mm_srai_epi32(v0, 31));
@@ -225,7 +231,7 @@ void process_block_int32_to_int64(int64_t* dst, const int32_t* src, ssize_t bloc
     ssize_t i = 0;
 
     for (; i + step <= block_size; i += step) {
-        __builtin_prefetch(src + i + 32, 0, 3);
+        PREFETCH(src + i + 32);
 
         int32x4_t v0 = vld1q_s32(src + i);
         vst1q_s64(dst + i, vmovl_s32(vget_low_s32(v0)));
@@ -267,7 +273,7 @@ void process_block_int64_to_int32(int32_t* dst, const int64_t* src, ssize_t bloc
     ssize_t i = 0;
 
     for (; i + simd_width * 2 <= block_size; i += simd_width * 2) {
-        _mm_prefetch(reinterpret_cast<const char*>(src + i + 16), _MM_HINT_T0);
+        PREFETCH(reinterpret_cast<const char*>(src + i + 16));
 
         // load 2x2 int64 = 4 int64 total
         __m128i v0 = _mm_loadu_si128(reinterpret_cast<const __m128i*>(src + i));
@@ -294,7 +300,7 @@ void process_block_int64_to_int32(int32_t* dst, const int64_t* src, ssize_t bloc
     ssize_t i = 0;
 
     for (; i + simd_width * 2 <= block_size; i += simd_width * 2) {
-        __builtin_prefetch(src + i + 16, 0, 3);
+        PREFETCH(src + i + 16);
 
         // load 4x int64
         int64x2_t v0 = vld1q_s64(src + i);
@@ -386,7 +392,7 @@ void convert_vector_fp32_to_fp16(uint16_t* output, const float* input, size_t si
             size_t block_end = std::min(block_start + BLOCK_SIZE, size);
 
             if (LIKELY(block_start + BLOCK_SIZE + PREFETCH_DIST <= size)) {
-                __builtin_prefetch(&input[block_start + BLOCK_SIZE + PREFETCH_DIST], 0, 3);
+                PREFETCH(&input[block_start + BLOCK_SIZE + PREFETCH_DIST]);
             }
 
             size_t i = block_start;
@@ -411,7 +417,7 @@ void convert_vector_fp32_to_fp16(uint16_t* output, const float* input, size_t si
             size_t block_end = std::min(block_start + BLOCK_SIZE, size);
 
             if (LIKELY(block_start + BLOCK_SIZE + PREFETCH_DIST <= size)) {
-                __builtin_prefetch(&input[block_start + BLOCK_SIZE + PREFETCH_DIST], 0, 3);
+                PREFETCH(&input[block_start + BLOCK_SIZE + PREFETCH_DIST]);
             }
             
             // A simple scalar loop is clearer and avoids the bugs
@@ -439,7 +445,7 @@ void convert_vector_fp16_to_fp32(float* output, const uint16_t* input, size_t si
             size_t block_end = std::min(block_start + BLOCK_SIZE, size);
 
             if (LIKELY(block_start + BLOCK_SIZE + PREFETCH_DIST <= size)) {
-                __builtin_prefetch(&input[block_start + BLOCK_SIZE + PREFETCH_DIST], 0, 3);
+                PREFETCH(&input[block_start + BLOCK_SIZE + PREFETCH_DIST]);
             }
 
             size_t i = block_start;
@@ -469,7 +475,7 @@ void convert_vector_fp16_to_fp32(float* output, const uint16_t* input, size_t si
             size_t block_end = std::min(block_start + BLOCK_SIZE, size);
 
             if (LIKELY(block_start + BLOCK_SIZE + PREFETCH_DIST <= size)) {
-                __builtin_prefetch(&input[block_start + BLOCK_SIZE + PREFETCH_DIST], 0, 3);
+                PREFETCH(&input[block_start + BLOCK_SIZE + PREFETCH_DIST]);
             }
             
             // A simple scalar loop is clearer and avoids the bugs
