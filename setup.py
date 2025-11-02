@@ -240,6 +240,10 @@ def get_build_ext():
                     '-DANDROID_ABI=arm64-v8a',
                     '-DANDROID_NATIVE_API_LEVEL=21',
                 ]
+            elif IS_WINDOWS:
+                cmake_cmd += [
+                    '-DTOKENIZERS_CPP_MSVC_RUNTIME_LIBRARY=MT',
+                ]
             try:
                 subprocess.check_call(cmake_cmd, cwd=self.tokenizers_cpp_build_dir)
             except subprocess.CalledProcessError as e:
@@ -355,7 +359,7 @@ def get_build_ext():
             elif ext.name == "gsv_oie.text_preprocess.tokenizers_cpp":
                 ext.library_dirs.extend([self.tokenizers_cpp_build_dir])
                 if IS_WINDOWS:
-                    ext.library_dirs.append(os.path.join(self.tokenizers_cpp_build_dir, 'Debug'))
+                    ext.library_dirs.append(os.path.join(self.tokenizers_cpp_build_dir, 'Release'))
 
                 ext.include_dirs.extend([
                     os.path.join(self.tokenizers_cpp_src_dir, 'include'),
