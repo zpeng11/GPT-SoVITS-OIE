@@ -266,7 +266,7 @@ class GSVEngine : NonCopyable {
                                                                 kv_cache_shape.data(), 
                                                                 kv_cache_shape.size()));
         }
-        CPP_PRINT("Running fsdec quantized...");
+        // CPP_PRINT("Running fsdec quantized...");
         try{
             fsdec_quant_session_->Run(global_run_options, input_names.data(), input_tensors.data(), input_tensors.size(), output_names.data(), output_tensors.data(), output_tensors.size());
         }
@@ -275,7 +275,7 @@ class GSVEngine : NonCopyable {
             // CPP_PRINT("Error during fsdec quantized inference: " + std::string(e.what()));
             throw;
         }
-        CPP_PRINT("Finished running fsdec quantized.");
+        // CPP_PRINT("Finished running fsdec quantized.");
        // Process output tensors y
         y_ = std::move(output_tensors[0]); 
     }
@@ -394,10 +394,10 @@ class GSVEngine : NonCopyable {
             sdec_iobinding.BindOutput(sdec_output_names_[3 + i * 2 + 1].c_str(), v_tensors.back());
         }
         
-        CPP_PRINT("Running stage decoder...");
+        // CPP_PRINT("Running stage decoder...");
         sdec_iobinding.SynchronizeInputs();
         sdec_session_->Run(global_run_options, sdec_iobinding);
-        CPP_PRINT("Stage decoder run completed.");
+        // CPP_PRINT("Stage decoder run completed.");
         sdec_iobinding.SynchronizeOutputs();
 
         std::swap(y_, y_new);
@@ -416,9 +416,9 @@ class GSVEngine : NonCopyable {
             {"spectrum", &spectrum},
             {"sv_emb", &sv_emb}
         };
-        CPP_PRINT("Running SoVITS inference...");
+        // CPP_PRINT("Running SoVITS inference...");
         auto output_map = sovits_engine_->infer_tensor(input_map);
-        CPP_PRINT("SoVITS inference completed.");
+        // CPP_PRINT("SoVITS inference completed.");
         return create_numpy_array_from_tensor(output_map["audio32k"]->tensor());
     }
 

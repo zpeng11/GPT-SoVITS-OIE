@@ -39,7 +39,7 @@ print(result)
 # exit()
 
 
-gsv_runtime = GSVRuntime('/home/eleven/GPT-SoVITS-export/onnx/v2.gsv')
+gsv_runtime = GSVRuntime('/home/eleven/GPT-SoVITS-export/onnx/v2pp_quant.gsv')
 
 print(gsv_runtime.config)
 print(gsv_runtime.get_reference_set())

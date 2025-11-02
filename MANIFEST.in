@@ -8,7 +8,8 @@ include setup.py
 
 # Include everything in gsv_oie package directory EXCEPT pretrained_models
 recursive-include gsv_oie *
-recursive-include extern/onnxruntime *
+recursive-include extern/onnxruntime/dist *
+recursive-include extern/MNN/dist *
 recursive-exclude gsv_oie/pretrained_models *
 global-exclude gsv_oie/pretrained_models/*
 prune gsv_oie/pretrained_models
@@ -42,7 +43,12 @@ global-exclude .coverage
 global-exclude *.egg-info
 
 # But explicitly allow onnxruntime libraries (this overrides the above exclusions)
-recursive-include extern/onnxruntime/lib *.so
-recursive-include extern/onnxruntime/lib *.a
-recursive-include extern/onnxruntime/lib *.dll
-recursive-include extern/onnxruntime/lib *.dylib
+recursive-include extern/onnxruntime/dist *.so
+recursive-include extern/onnxruntime/dist *.a
+recursive-include extern/onnxruntime/dist *.dll
+recursive-include extern/onnxruntime/dist *.dylib
+
+recursive-include extern/MNN/dist *.so
+recursive-include extern/MNN/dist *.a
+recursive-include extern/MNN/dist *.dll
+recursive-include extern/MNN/dist *.dylib

@@ -17,7 +17,9 @@ import bsdiff4
 from tqdm import tqdm
 from ctypes import CDLL
 
-CDLL(os.path.join(os.path.dirname(__file__), '..','..','extern','onnxruntime','lib','libonnxruntime.so'), mode=2)
+CDLL(os.path.join(os.path.dirname(__file__), '..','..','extern','onnxruntime','lib','libonnxruntime.so.1.23.2'), mode=2)
+CDLL(os.path.join(os.path.dirname(__file__), '..','..','extern','MNN','dist','libMNN_Express.so'), mode=2)
+CDLL(os.path.join(os.path.dirname(__file__), '..','..','extern','MNN','dist','libMNN.so'), mode=2)
 
 # Try to import the compiled C++ module
 from .gsv_engine import GSVEngine
