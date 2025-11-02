@@ -350,7 +350,7 @@ def get_build_ext():
                     os.path.join(os.path.dirname(__file__), 'extern', 'fp16', 'include'),
                 ])
 
-                ext.libraries.extend(['MNN', 'MNN_Express', 'onnxruntime'])
+                ext.libraries.extend(['MNN', 'onnxruntime'])
 
             elif ext.name == "gsv_oie.text_preprocess.tokenizers_cpp":
                 ext.library_dirs.extend([self.tokenizers_cpp_build_dir])
