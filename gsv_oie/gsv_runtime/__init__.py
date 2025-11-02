@@ -17,9 +17,17 @@ import bsdiff4
 from tqdm import tqdm
 from ctypes import CDLL
 
-CDLL(os.path.join(os.path.dirname(__file__), '..','..','extern','onnxruntime','lib','libonnxruntime.so.1.23.2'), mode=2)
-CDLL(os.path.join(os.path.dirname(__file__), '..','..','extern','MNN','dist','libMNN_Express.so'), mode=2)
-CDLL(os.path.join(os.path.dirname(__file__), '..','..','extern','MNN','dist','libMNN.so'), mode=2)
+def get_library_platform_name(name: str) -> str:
+    """Get the platform-specific library filename."""
+    if sys.platform.startswith('win'):
+        return f"{name}.dll"
+    elif sys.platform.startswith('darwin'):
+        return f"lib{name}.dylib"
+    else:
+        return f"lib{name}.so"
+
+CDLL(os.path.join(os.path.dirname(__file__), '..','..','extern','onnxruntime','dist',get_library_platform_name("onnxruntime")), mode=2)
+CDLL(os.path.join(os.path.dirname(__file__), '..','..','extern','MNN','dist',get_library_platform_name("MNN")), mode=2)
 
 # Try to import the compiled C++ module
 from .gsv_engine import GSVEngine

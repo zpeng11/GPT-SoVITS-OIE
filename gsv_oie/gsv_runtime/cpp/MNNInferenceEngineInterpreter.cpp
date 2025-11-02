@@ -27,7 +27,7 @@ static MNN::RuntimeInfo runtime_info = MNN::Interpreter::createRuntime({global_c
 MNNInferenceEngineInterpreter::MNNInferenceEngineInterpreter(const std::string model_path){
     CPP_PRINT("MNNInferenceEngineInterpreter initialized with model: " + model_path);
     model_filename_ = std::filesystem::path(model_path).filename().string();
-    interpreter_ = std::shared_ptr<MNN::Interpreter>(MNN::Interpreter::createFromFile(model_path.c_str()));
+    interpreter_ = MNN::Interpreter::createFromFile(model_path.c_str());
     session_ = interpreter_->createSession(global_config, runtime_info);
 }
 
@@ -109,5 +109,6 @@ std::map<std::string, std::shared_ptr<TensorDataGuard>> MNNInferenceEngineInterp
 }
 
 MNNInferenceEngineInterpreter::~MNNInferenceEngineInterpreter(){
+    MNN::Interpreter::destroy(interpreter_);
     CPP_PRINT("MNNInferenceEngineInterpreter destroyed");
 }

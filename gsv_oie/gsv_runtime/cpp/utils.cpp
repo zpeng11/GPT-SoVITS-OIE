@@ -1,7 +1,9 @@
 #include "utils.hpp"
 #include <iostream>
+#ifdef __linux__
 #include <unistd.h>      // getauxval
 #include <sys/auxv.h>    // AT_HWCAP2
+#endif
 #include <fstream>       // /proc fallback
 #include <string>
 #include <cstdint>
@@ -350,6 +352,7 @@ std::vector<int64_t> transform_int32_to_int64(const int32_t* src, size_t size) {
 #endif
 
 bool has_fp16_support() {
+#ifdef __linux__
 #if defined(__aarch64__) && defined(__ARM_NEON)
     unsigned long hwcap2 = getauxval(AT_HWCAP2);
     if (hwcap2 & HWCAP_FP16) {
@@ -363,6 +366,7 @@ bool has_fp16_support() {
             return line.find("fp16") != std::string::npos;
         }
     }
+#endif // __linux__
     return false;
 }
 

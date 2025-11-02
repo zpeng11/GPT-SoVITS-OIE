@@ -28,7 +28,7 @@ public:
     ~MNNInferenceEngineInterpreter();
 
 private:
-    std::shared_ptr<MNN::Interpreter> interpreter_;
+    MNN::Interpreter* interpreter_; //Do not use shared_ptr here because in doc: Windows 上建议使用 Interpreter::destroy , Tensor::destroy , Module::destroy 等方法进行 MNN 相关内存对象的析构，不要直接使用 delete （直接使用 delete 在 -DMNN_WIN_RUNTIME_MT=ON 时会出问题）
     MNN::Session* session_ = nullptr;
     std::string model_filename_;
 };

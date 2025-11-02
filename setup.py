@@ -13,6 +13,7 @@ import subprocess
 import glob
 from setuptools import setup, find_packages, Extension
 from distutils.errors import CompileError
+import shutil
 import re
 
 DIR = os.path.abspath(os.path.dirname(__file__))
@@ -38,12 +39,13 @@ def read_requirements():
 # Version information
 __version__ = '1.0.0'
 
-GSV_ANDROID_BUILD = False
-if os.environ.get('GSV_ANDROID_BUILD', '0') == '1':
-    GSV_ANDROID_BUILD = True
-
 IS_WINDOWS = sys.platform.startswith('win')
 IS_UNIX = not IS_WINDOWS
+
+GSV_ANDROID_BUILD = False
+if os.environ.get('GSV_ANDROID_BUILD', '0') == '1' and IS_UNIX:
+    GSV_ANDROID_BUILD = True
+
 
 def check_gcc_version():
     cc = os.environ.get('CC', 'gcc')
@@ -79,6 +81,14 @@ def check_gcc_version():
 def get_gsv_engine_ext():
     from pybind11.setup_helpers import Pybind11Extension
     import pybind11
+
+    engine_compiler_args = []
+    if IS_WINDOWS:
+        engine_compiler_args.extend(['/O2', '/Wall', '/openmp'])
+    else:
+        engine_compiler_args.extend(['-O3', '-Wall', '-fopenmp'])
+        if GSV_ANDROID_BUILD:
+            engine_compiler_args.extend(['-mfp16-format=ieee'])
     # Define the C++ extension
     gsv_engine_ext = Pybind11Extension(
         "gsv_oie.gsv_runtime.gsv_engine",
@@ -91,11 +101,16 @@ def get_gsv_engine_ext():
         library_dirs=[],
         libraries=[],
         cxx_std=17,
-        define_macros=[("VERSION_INFO", '"dev"')],
-        extra_compile_args=["/O2" if IS_WINDOWS else "-O3", "/Wall" if IS_WINDOWS else "-Wall", "/openmp" if IS_WINDOWS else "-fopenmp"],
+        define_macros=[("VERSION_INFO", '"release"')],
+        extra_compile_args=engine_compiler_args,
         extra_link_args=["/openmp" if IS_WINDOWS else "-fopenmp"],
     )
 
+    tokenizer_compile_args = []
+    if IS_WINDOWS:
+        tokenizer_compile_args.extend(['/O2', '/Wall'])
+    else:
+        tokenizer_compile_args.extend(['-O3', '-Wall'])
     tokenizer_ext = Pybind11Extension(
         "gsv_oie.text_preprocess.tokenizers_cpp",
         sources=[
@@ -105,8 +120,8 @@ def get_gsv_engine_ext():
         library_dirs=[],
         libraries=[],
         cxx_std=17,
-        define_macros=[("VERSION_INFO", '"dev"')],
-        extra_compile_args=["/O2" if IS_WINDOWS else "-O3", "/Wall" if IS_WINDOWS else "-Wall"],
+        define_macros=[("VERSION_INFO", '"release"')],
+        extra_compile_args=tokenizer_compile_args,
         extra_link_args=[],
     )
     return [gsv_engine_ext, tokenizer_ext]
@@ -122,11 +137,15 @@ def get_build_ext():
 
             self.prebuild_onnxruntime()
 
+            self.copy_onnxruntime_to_build()
+            self.copy_mnn_to_build()
+
             # 第二步：pybind11 扩展构建（依赖 CMake 输出）
             super().run()  # 这会按 ext_modules 顺序构建 pybind11 扩展，并链接 CMake 库
 
         def build_mnn(self):
-            check_gcc_version()
+            if IS_UNIX and not GSV_ANDROID_BUILD:
+                check_gcc_version()
             self.mnn_src_dir = os.path.join(os.path.dirname(__file__), 'extern', 'MNN')
             self.mnn_build_dir = os.path.join(self.mnn_src_dir, 'build')
             # 确保构建目录
@@ -142,6 +161,7 @@ def get_build_ext():
                 '-DMNN_REDUCE_SIZE=ON',
                 '-DMNN_LOW_MEMORY=ON',
                 '-DMNN_CPU_WEIGHT_DEQUANT_GEMM=ON',
+                '-DMNN_SEP_BUILD=OFF',
                 '-S', self.mnn_src_dir,  # 源目录（项目根，含 CMakeLists.txt）
                 '-B', self.mnn_build_dir  # 构建目录
             ]
@@ -167,6 +187,13 @@ def get_build_ext():
                     '-DMNN_AVX2=ON',
                     '-DMNN_AVX512=ON',
                 ]
+                if IS_WINDOWS:
+                    cmake_cmd += [
+                        '-DMNN_WIN_RUNTIME_MT=ON',
+                        '-DMNN_OPENCL=ON',
+                        '-DMNN_VULKAN=ON',
+                        '-DMNN_OPENGL=ON',
+                    ]
 
             try:
                 subprocess.check_call(cmake_cmd, cwd=self.mnn_build_dir)
@@ -183,10 +210,13 @@ def get_build_ext():
 
             self.mnn_dist_dir = os.path.join(self.mnn_src_dir, 'dist')
             os.makedirs(self.mnn_dist_dir, exist_ok=True)
-            for file in glob.glob(os.path.join(self.mnn_build_dir, '*MNN*')):
-                subprocess.run(['cp', file, self.mnn_dist_dir])
-            for file in glob.glob(os.path.join(self.mnn_build_dir, 'express', '*MNN_Express*')):
-                subprocess.run(['cp', file, self.mnn_dist_dir])
+            if IS_UNIX:
+                for file in glob.glob(os.path.join(self.mnn_build_dir, '*MNN.so*')):
+                    subprocess.run(['cp', file, self.mnn_dist_dir])
+                for file in glob.glob(os.path.join(self.mnn_build_dir, 'express', '*MNN_Express.so*')):
+                    subprocess.run(['cp', file, self.mnn_dist_dir])
+            else:
+                subprocess.run(['cp', os.path.join(self.mnn_build_dir,'Debug','MNN.dll'), self.mnn_dist_dir])
 
         def build_tokenizers_cpp(self):
             self.tokenizers_cpp_src_dir = os.path.join(os.path.dirname(__file__), 'extern', 'tokenizers-cpp')
@@ -220,10 +250,6 @@ def get_build_ext():
             except subprocess.CalledProcessError as e:
                 raise CompileError(f'Tokenizers CMake build failed: {e}')
 
-            lib_path = os.path.join(self.tokenizers_cpp_build_dir, 'libtokenizers_cpp.a')
-            if os.path.exists(lib_path):
-                print(f"Tokenizers CMake lib built at: {lib_path}")
-
         def prebuild_onnxruntime(self):
             import requests
             import tarfile
@@ -232,13 +258,21 @@ def get_build_ext():
 
             # URL for ONNX Runtime Linux x64 package
             ort_version = "1.23.2"
-            url = f"https://github.com/microsoft/onnxruntime/releases/download/v{ort_version}/onnxruntime-linux-x64-{ort_version}.tgz"
+            url = None
+            if IS_WINDOWS:
+                url = f"https://github.com/microsoft/onnxruntime/releases/download/v{ort_version}/onnxruntime-win-x64-{ort_version}.zip"
+            else:
+                url = f"https://github.com/microsoft/onnxruntime/releases/download/v{ort_version}/onnxruntime-linux-x64-{ort_version}.tgz"
 
             # Target directory in extern/onnxruntime
             self.onnxruntime_target_dir = os.path.join(os.path.dirname(__file__), 'extern', 'onnxruntime')
+            self.onnxruntime_lib_dir = os.path.join(self.onnxruntime_target_dir, 'lib')
+            self.onnxruntime_dist_dir = os.path.join(self.onnxruntime_target_dir, 'dist')
 
             # Remove existing directory if it exists
-            if os.path.exists(self.onnxruntime_target_dir) and os.path.exists(os.path.join(self.onnxruntime_target_dir, 'lib', 'libonnxruntime.so')):
+            if os.path.exists(self.onnxruntime_target_dir) and \
+               (os.path.exists(os.path.join(self.onnxruntime_lib_dir, 'libonnxruntime.so')) or \
+                os.path.exists(os.path.join(self.onnxruntime_lib_dir, 'onnxruntime.dll'))):
                 return  # 已存在则跳过下载解压
 
             # Create parent directory if it doesn't exist
@@ -283,10 +317,11 @@ def get_build_ext():
                     # Move to target location as 'onnxruntime'
                     shutil.move(extracted_dir, self.onnxruntime_target_dir)
 
-                    self.onnxruntime_dist_dir = os.path.join(self.onnxruntime_target_dir, 'dist')
                     os.makedirs(self.onnxruntime_dist_dir, exist_ok=True)
                     if IS_UNIX:
-                        shutil.copy(os.path.join(self.onnxruntime_target_dir, 'lib', f'libonnxruntime.so.{ort_version}'), self.onnxruntime_dist_dir)
+                        shutil.copy(os.path.join(self.onnxruntime_lib_dir, f'libonnxruntime.so.{ort_version}'), os.path.join(self.onnxruntime_dist_dir, 'libonnxruntime.so'))
+                    else:
+                        shutil.copy(os.path.join(self.onnxruntime_lib_dir, 'onnxruntime.dll'), self.onnxruntime_dist_dir)
 
                 print(f"ONNX Runtime extracted to: {self.onnxruntime_target_dir}")
 
@@ -301,8 +336,8 @@ def get_build_ext():
         def build_extension(self, ext):
             if ext.name == "gsv_oie.gsv_runtime.gsv_engine":
                 ext.library_dirs.extend([
-                    self.mnn_dist_dir,
-                    os.path.join(self.onnxruntime_target_dir, 'lib')
+                    self.mnn_dist_dir if IS_UNIX else os.path.join(self.mnn_build_dir, 'Debug'),
+                    self.onnxruntime_lib_dir
                     ])
 
                 ext.include_dirs.extend([
@@ -324,27 +359,10 @@ def get_build_ext():
 
             super().build_extension(ext)
 
-    return CoordinatedBuildExt
-
-def get_build_py():
-    from setuptools.command.build_py import build_py
-    import shutil
-
-    class CustomBuildPy(build_py):
-        def run(self):
-            # Run the standard build_py first
-            super().run()
-
-            # Copy onnxruntime files to the build directory
-            self.copy_onnxruntime_to_build()
-            self.copy_mnn_to_build()
-
         def copy_onnxruntime_to_build(self):
             """Copy onnxruntime files to the build directory"""
-            onnxruntime_source = os.path.join(os.path.dirname(__file__), 'extern', 'onnxruntime','dist')
-
-            if not os.path.exists(onnxruntime_source):
-                print(f"Warning: {onnxruntime_source} does not exist")
+            if not os.path.exists(self.onnxruntime_dist_dir):
+                print(f"Warning: {self.onnxruntime_dist_dir} does not exist")
                 return
 
             # Copy to the build directory
@@ -358,16 +376,14 @@ def get_build_py():
                 shutil.rmtree(onnxruntime_target)
 
             # Copy all files and directories
-            shutil.copytree(onnxruntime_source, onnxruntime_target)
+            shutil.copytree(self.onnxruntime_dist_dir, onnxruntime_target)
 
             print(f"Copied ONNX Runtime to {onnxruntime_target}")
         
         def copy_mnn_to_build(self):
             """Copy MNN files to the build directory"""
-            mnn_source = os.path.join(os.path.dirname(__file__), 'extern', 'MNN', 'dist')
-
-            if not os.path.exists(mnn_source):
-                print(f"Warning: {mnn_source} does not exist")
+            if not os.path.exists(self.mnn_dist_dir):
+                print(f"Warning: {self.mnn_dist_dir} does not exist")
                 return
 
             # Copy to the build directory
@@ -381,11 +397,11 @@ def get_build_py():
                 shutil.rmtree(mnn_target)
 
             # Copy all files and directories
-            shutil.copytree(mnn_source, mnn_target)
+            shutil.copytree(self.mnn_dist_dir, mnn_target)
 
             print(f"Copied MNN to {mnn_target}")
 
-    return CustomBuildPy
+    return CoordinatedBuildExt
 
 setup(
     name='gsv_oie',
@@ -428,8 +444,7 @@ setup(
     # C++ extension modules
     ext_modules=get_gsv_engine_ext(),
     cmdclass={
-        "build_ext": get_build_ext(),
-        "build_py": get_build_py(),
+        "build_ext": get_build_ext()
     },
 
 
