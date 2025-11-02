@@ -125,9 +125,13 @@ void convert_vector_int64_to_int32(int32_t* dst, const int64_t* src, ssize_t siz
 void convert_vector_int32_to_int64(int64_t* dst, const int32_t* src, ssize_t size);
 
 #include <vector>
-#include <cstdlib>  // For std::aligned_alloc and std::free
-#include <memory>   // For std::assume_aligned (optional, for compiler hints)
-#include <new>      // std::bad_alloc
+#ifdef _WIN32
+#include <malloc.h>  // For _aligned_malloc and _aligned_free on Windows
+#else
+#include <cstdlib>   // For std::aligned_alloc and std::free on POSIX
+#endif
+#include <memory>    // For std::assume_aligned (optional, for compiler hints)
+#include <new>       // std::bad_alloc
 
 template <typename T, std::size_t Alignment = 16>
 struct aligned_allocator {
@@ -155,13 +159,30 @@ struct aligned_allocator {
         if (size_type(-1) / sizeof(T) < n) {
             throw std::bad_alloc{};
         }
-        void* p = std::aligned_alloc(Alignment, n * sizeof(T));
+        
+        void* p = nullptr;
+        const size_type total_size = n * sizeof(T);
+        
+#ifdef _WIN32
+        // Windows: _aligned_malloc(size, alignment)
+        p = _aligned_malloc(total_size, Alignment);
+#else
+        // POSIX: std::aligned_alloc(alignment, size)
+        // Note: size must be a multiple of alignment
+        const size_type aligned_size = ((total_size + Alignment - 1) / Alignment) * Alignment;
+        p = std::aligned_alloc(Alignment, aligned_size);
+#endif
+        
         if (!p) throw std::bad_alloc{};
         return static_cast<pointer>(p);
     }
 
     void deallocate(pointer p, size_type n) noexcept {
+#ifdef _WIN32
+        _aligned_free(p);
+#else
         std::free(p);
+#endif
     }
 
     // Optional but recommended: Use allocator_traits defaults for construct/destroy
