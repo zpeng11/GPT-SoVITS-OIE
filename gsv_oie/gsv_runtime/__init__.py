@@ -149,7 +149,7 @@ class GSVRuntime:
     def infer(self, text_input:str,
               language: str = 'auto',
               text_split_method: str = None,
-              output_audio_interval: float = 0.0,
+              output_audio_interval: float = 0.3,
               top_k: int = 15,
               temperature: float = 1.0,
               repeat_penalty: float = 1.35) -> np.ndarray:

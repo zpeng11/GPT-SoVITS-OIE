@@ -45,8 +45,8 @@ print(gsv_runtime.config)
 print(gsv_runtime.get_reference_set())
 
 result = gsv_runtime.infer("""
-人工智能是人类智慧无与伦比的璀璨之光
-""", language='zh', text_split_method='cut5')
+やがて来る世界を見渡せば、必ず赤い旗の世界となるだろう。人工知能：人類の知恵の輝かしい光
+""", language='ja', text_split_method='cut5')
 
 print(result.min(), result.max(), result.mean())
 audio_postprocess([result], 'gsv_output.wav')

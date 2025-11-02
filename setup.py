@@ -77,7 +77,6 @@ def get_gsv_engine_ext():
         "gsv_oie.gsv_runtime.gsv_engine",
         sources=[
             "gsv_oie/gsv_runtime/cpp/gsv_engine.cpp",
-            "gsv_oie/gsv_runtime/cpp/MNNInferenceEngine.cpp",
             "gsv_oie/gsv_runtime/cpp/MNNInferenceEngineInterpreter.cpp",
             "gsv_oie/gsv_runtime/cpp/utils.cpp",
         ],
