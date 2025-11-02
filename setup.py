@@ -15,6 +15,7 @@ from setuptools import setup, find_packages, Extension
 from distutils.errors import CompileError
 import shutil
 import re
+import zipfile
 
 DIR = os.path.abspath(os.path.dirname(__file__))
 sys.path.insert(0, os.path.join(DIR, "extern", "pybind11"))
@@ -285,7 +286,7 @@ def get_build_ext():
                 response.raise_for_status()
 
                 # Create temporary file for download
-                with tempfile.NamedTemporaryFile(suffix='.tgz', delete=False) as temp_file:
+                with tempfile.NamedTemporaryFile(suffix='.tgz' if IS_UNIX else '.zip', delete=False) as temp_file:
                     for chunk in response.iter_content(chunk_size=8192):
                         if chunk:
                             temp_file.write(chunk)
@@ -301,8 +302,12 @@ def get_build_ext():
             try:
                 with tempfile.TemporaryDirectory() as temp_extract_dir:
                     # Extract to temporary directory first
-                    with tarfile.open(temp_file_path, 'r:gz') as tar:
-                        tar.extractall(temp_extract_dir)
+                    if IS_UNIX:
+                        with tarfile.open(temp_file_path, 'r:gz') as tar:
+                            tar.extractall(temp_extract_dir)
+                    else:
+                        with zipfile.ZipFile(temp_file_path, 'r') as zip_ref:
+                            zip_ref.extractall(temp_extract_dir)
 
                     # Find the extracted directory (should be 'onnxruntime-linux-x64-1.23.1')
                     extracted_dirs = [d for d in os.listdir(temp_extract_dir)
