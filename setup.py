@@ -192,7 +192,6 @@ def get_build_ext():
                         '-DMNN_WIN_RUNTIME_MT=ON',
                         '-DMNN_OPENCL=ON',
                         '-DMNN_VULKAN=ON',
-                        '-DMNN_OPENGL=ON',
                     ]
 
             try:
