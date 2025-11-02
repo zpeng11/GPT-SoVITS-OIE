@@ -354,6 +354,8 @@ def get_build_ext():
 
             elif ext.name == "gsv_oie.text_preprocess.tokenizers_cpp":
                 ext.library_dirs.extend([self.tokenizers_cpp_build_dir])
+                if IS_WINDOWS:
+                    ext.library_dirs.append(os.path.join(self.tokenizers_cpp_build_dir, 'Debug'))
 
                 ext.include_dirs.extend([
                     os.path.join(self.tokenizers_cpp_src_dir, 'include'),
