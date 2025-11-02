@@ -362,6 +362,8 @@ def get_build_ext():
                 ])
 
                 ext.libraries.extend(['tokenizers_c','tokenizers_cpp'])
+                if IS_WINDOWS:
+                    ext.libraries.extend(['ntdll', 'ws2_32', 'wsock32', 'Bcrypt', 'userenv', 'iphlpapi', 'psapi'])
 
             super().build_extension(ext)
 
