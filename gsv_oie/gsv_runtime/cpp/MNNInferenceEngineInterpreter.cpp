@@ -6,20 +6,29 @@
 
 #define CPP_PRINT(msg) py::print("[C++] " + std::string(msg))
 constexpr int MNN_CPU_NUM_THREAD = 8;
-struct MNN::BackendConfig global_backend_config{
-    .memory = MNN::BackendConfig::Memory_Low,
-    .power = MNN::BackendConfig::Power_High,
-    .precision = MNN::BackendConfig::Precision_Low,
-    .sharedContext = nullptr
-};
-static MNN::ScheduleConfig global_config{
-    .saveTensors = {},
-    .type = MNN_FORWARD_AUTO,
-    .numThread = MNN_CPU_NUM_THREAD,
-    .path = {},
-    .backupType = MNN_FORWARD_CPU,
-    .backendConfig = &global_backend_config
-};
+static MNN::BackendConfig create_backend_config() {
+    MNN::BackendConfig config;
+    config.memory = MNN::BackendConfig::Memory_Low;
+    config.power = MNN::BackendConfig::Power_High;
+    config.precision = MNN::BackendConfig::Precision_Low;
+    config.sharedContext = nullptr;
+    return config;
+}
+
+static MNN::BackendConfig global_backend_config = create_backend_config();
+
+static MNN::ScheduleConfig create_schedule_config() {
+    MNN::ScheduleConfig config;
+    config.saveTensors = {};
+    config.type = MNN_FORWARD_AUTO;
+    config.numThread = MNN_CPU_NUM_THREAD;
+    config.path = {};
+    config.backupType = MNN_FORWARD_CPU;
+    config.backendConfig = &global_backend_config;
+    return config;
+}
+
+static MNN::ScheduleConfig global_config = create_schedule_config();
 
 
 static MNN::RuntimeInfo runtime_info = MNN::Interpreter::createRuntime({global_config});

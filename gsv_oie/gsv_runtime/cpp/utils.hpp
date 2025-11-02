@@ -17,6 +17,10 @@
 #include <limits>
 #include <cstring>
 #include <fp16.h>
+#include <cstddef>
+#ifdef _WIN32
+using ssize_t = std::ptrdiff_t;
+#endif
 
 namespace py = pybind11;
 
