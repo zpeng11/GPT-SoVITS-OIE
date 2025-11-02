@@ -57,7 +57,12 @@ class GSVEngine : NonCopyable {
         else{
             cache_element_size_ = sizeof(uint8_t);
             argument_element_size_ = sizeof(float);
+            #ifdef _WIN32
+            std::wstring fsdec_path_wstring = std::wstring(fsdec_path.begin(), fsdec_path.end());
+            fsdec_quant_session_ = std::make_shared<Ort::Session>(global_env, fsdec_path_wstring.c_str(), global_session_options);
+            #else
             fsdec_quant_session_ = std::make_shared<Ort::Session>(global_env, fsdec_path.c_str(), global_session_options);
+            #endif
         }
         for(int i = 0; i < HEAD_NUM; ++i){
             k_cache_.emplace_back(AlignedVec(KV_CACHE_PREPARED_LENGTH * 1 * DECODE_DIMENSION * cache_element_size_));
@@ -68,7 +73,12 @@ class GSVEngine : NonCopyable {
         global_session_options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);
         global_session_options.SetIntraOpNumThreads(STEP_DECODE_THREAD_NUM);
         global_session_options.SetInterOpNumThreads(STEP_DECODE_THREAD_NUM);
+        #ifdef _WIN32
+        std::wstring sdec_path_wstring = std::wstring(sdec_path.begin(), sdec_path.end());
+        sdec_session_ = std::make_shared<Ort::Session>(global_env, sdec_path_wstring.c_str(), global_session_options);
+        #else
         sdec_session_ = std::make_shared<Ort::Session>(global_env, sdec_path.c_str(), global_session_options);
+        #endif
         for(const auto& name : sdec_session_->GetInputNames()) sdec_input_names_.push_back(name);
         for(const auto& name : sdec_session_->GetOutputNames()) sdec_output_names_.push_back(name);
 
