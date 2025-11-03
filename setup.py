@@ -85,7 +85,7 @@ def get_gsv_engine_ext():
 
     engine_compiler_args = []
     if IS_WINDOWS:
-        engine_compiler_args.extend(['/O2', '/Wall', '/openmp', '/MT'])
+        engine_compiler_args.extend(['/O2', '/Wall', '/openmp', '/MT'])  # Changed from /MD to /MT
     else:
         engine_compiler_args.extend(['-O3', '-Wall', '-fopenmp'])
         if GSV_ANDROID_BUILD:
@@ -109,7 +109,7 @@ def get_gsv_engine_ext():
 
     tokenizer_compile_args = []
     if IS_WINDOWS:
-        tokenizer_compile_args.extend(['/O2', '/Wall', '/MT'])
+        tokenizer_compile_args.extend(['/O2', '/Wall', '/MT'])  # Changed from /MD to /MT
     else:
         tokenizer_compile_args.extend(['-O3', '-Wall'])
     tokenizer_ext = Pybind11Extension(
@@ -190,9 +190,12 @@ def get_build_ext():
                 ]
                 if IS_WINDOWS:
                     cmake_cmd += [
-                        '-DMNN_WIN_RUNTIME_MT=ON',
+                        '-DMNN_WIN_RUNTIME_MT=ON',  # Changed from OFF to ON
                         '-DMNN_OPENCL=ON',
                         '-DMNN_VULKAN=ON',
+                        '-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded',  # Add this
+                        '-DCMAKE_CXX_FLAGS_RELEASE=/MT /O2',            # Add this
+                        '-DCMAKE_C_FLAGS_RELEASE=/MT /O2',              # Add this
                     ]
 
             try:
@@ -228,8 +231,6 @@ def get_build_ext():
             cmake_cmd = [
                 'cmake',
                 '-DCMAKE_BUILD_TYPE=Release',
-                '-DCMAKE_CXX_FLAGS=-fPIC',
-                '-DCMAKE_C_FLAGS=-fPIC',
                 '-S', self.tokenizers_cpp_src_dir,
                 '-B', self.tokenizers_cpp_build_dir
             ]
@@ -244,7 +245,15 @@ def get_build_ext():
                 ]
             elif IS_WINDOWS:
                 cmake_cmd += [
-                    '-DTOKENIZERS_CPP_MSVC_RUNTIME_LIBRARY=MT',
+                    '-DTOKENIZERS_CPP_MSVC_RUNTIME_LIBRARY=MT',  # Changed from MD to MT
+                    '-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded',  # Add this
+                    '-DCMAKE_CXX_FLAGS_RELEASE=/MT /O2',           # Changed from /MD to /MT
+                    '-DCMAKE_C_FLAGS_RELEASE=/MT /O2',             # Changed from /MD to /MT
+                ]
+            else:
+                cmake_cmd += [
+                    '-DCMAKE_CXX_FLAGS=-fPIC',
+                    '-DCMAKE_C_FLAGS=-fPIC',
                 ]
             try:
                 subprocess.check_call(cmake_cmd, cwd=self.tokenizers_cpp_build_dir)
@@ -363,7 +372,7 @@ def get_build_ext():
             elif ext.name == "gsv_oie.text_preprocess.tokenizers_cpp":
                 ext.library_dirs.extend([self.tokenizers_cpp_build_dir])
                 if IS_WINDOWS:
-                    ext.library_dirs.append(os.path.join(self.tokenizers_cpp_build_dir, 'Release'))
+                    ext.library_dirs.append(os.path.join(self.tokenizers_cpp_build_dir, 'release'))
 
                 ext.include_dirs.extend([
                     os.path.join(self.tokenizers_cpp_src_dir, 'include'),
