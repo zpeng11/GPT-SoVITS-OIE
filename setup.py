@@ -85,7 +85,7 @@ def get_gsv_engine_ext():
 
     engine_compiler_args = []
     if IS_WINDOWS:
-        engine_compiler_args.extend(['/O2', '/Wall', '/openmp'])
+        engine_compiler_args.extend(['/O2', '/Wall', '/openmp', '/MT'])
     else:
         engine_compiler_args.extend(['-O3', '-Wall', '-fopenmp'])
         if GSV_ANDROID_BUILD:
@@ -109,7 +109,7 @@ def get_gsv_engine_ext():
 
     tokenizer_compile_args = []
     if IS_WINDOWS:
-        tokenizer_compile_args.extend(['/O2', '/Wall'])
+        tokenizer_compile_args.extend(['/O2', '/Wall', '/MT'])
     else:
         tokenizer_compile_args.extend(['-O3', '-Wall'])
     tokenizer_ext = Pybind11Extension(
@@ -202,6 +202,8 @@ def get_build_ext():
 
             # CMake 构建
             build_cmd = ['cmake', '--build', self.mnn_build_dir, '-j8']
+            if IS_WINDOWS:
+                build_cmd += ['--config', 'Release']
             try:
                 subprocess.check_call(build_cmd, cwd=self.mnn_build_dir)
             except subprocess.CalledProcessError as e:
@@ -216,7 +218,7 @@ def get_build_ext():
                 for file in glob.glob(os.path.join(self.mnn_build_dir, 'express', '*MNN_Express.so*')):
                     shutil.copy(file, self.mnn_dist_dir)
             else:
-                shutil.copy(os.path.join(self.mnn_build_dir,'Debug','MNN.dll'), self.mnn_dist_dir)
+                shutil.copy(os.path.join(self.mnn_build_dir,'Release','MNN.dll'), self.mnn_dist_dir)
 
         def build_tokenizers_cpp(self):
             self.tokenizers_cpp_src_dir = os.path.join(os.path.dirname(__file__), 'extern', 'tokenizers-cpp')
@@ -249,6 +251,8 @@ def get_build_ext():
             except subprocess.CalledProcessError as e:
                 raise CompileError(f'Tokenizers CMake config failed: {e}')
             build_cmd = ['cmake', '--build', self.tokenizers_cpp_build_dir, '-j8']
+            if IS_WINDOWS:
+                build_cmd += ['--config', 'Release']
             try:
                 subprocess.check_call(build_cmd, cwd=self.tokenizers_cpp_build_dir)
             except subprocess.CalledProcessError as e:
@@ -344,7 +348,7 @@ def get_build_ext():
         def build_extension(self, ext):
             if ext.name == "gsv_oie.gsv_runtime.gsv_engine":
                 ext.library_dirs.extend([
-                    self.mnn_dist_dir if IS_UNIX else os.path.join(self.mnn_build_dir, 'Debug'),
+                    self.mnn_dist_dir if IS_UNIX else os.path.join(self.mnn_build_dir, 'Release'),
                     self.onnxruntime_lib_dir
                     ])
 
