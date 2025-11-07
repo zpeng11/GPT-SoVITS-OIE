@@ -40,11 +40,8 @@ def read_requirements():
 # Version information
 __version__ = '1.0.0'
 
-IS_WINDOWS = sys.platform.startswith('win')
-IS_UNIX = not IS_WINDOWS
-
 GSV_ANDROID_BUILD = False
-if os.environ.get('GSV_ANDROID_BUILD', '0') == '1' and IS_UNIX:
+if os.environ.get('GSV_ANDROID_BUILD', '0') == '1':
     GSV_ANDROID_BUILD = True
 
 
@@ -83,13 +80,9 @@ def get_gsv_engine_ext():
     from pybind11.setup_helpers import Pybind11Extension
     import pybind11
 
-    engine_compiler_args = []
-    if IS_WINDOWS:
-        engine_compiler_args.extend(['/O2', '/Wall', '/openmp', '/MT'])  # Changed from /MD to /MT
-    else:
-        engine_compiler_args.extend(['-O3', '-Wall', '-fopenmp'])
-        if GSV_ANDROID_BUILD:
-            engine_compiler_args.extend(['-mfp16-format=ieee'])
+    engine_compiler_args = ['-O3', '-Wall', '-fopenmp']
+    if GSV_ANDROID_BUILD:
+        engine_compiler_args.extend(['-mfp16-format=ieee'])
     # Define the C++ extension
     gsv_engine_ext = Pybind11Extension(
         "gsv_oie.gsv_runtime.gsv_engine",
@@ -104,14 +97,9 @@ def get_gsv_engine_ext():
         cxx_std=17,
         define_macros=[("VERSION_INFO", '"release"')],
         extra_compile_args=engine_compiler_args,
-        extra_link_args=["/openmp" if IS_WINDOWS else "-fopenmp"],
+        extra_link_args=["-fopenmp"],
     )
 
-    tokenizer_compile_args = []
-    if IS_WINDOWS:
-        tokenizer_compile_args.extend(['/O2', '/Wall', '/MT'])  # Changed from /MD to /MT
-    else:
-        tokenizer_compile_args.extend(['-O3', '-Wall'])
     tokenizer_ext = Pybind11Extension(
         "gsv_oie.text_preprocess.tokenizers_cpp",
         sources=[
@@ -122,7 +110,7 @@ def get_gsv_engine_ext():
         libraries=[],
         cxx_std=17,
         define_macros=[("VERSION_INFO", '"release"')],
-        extra_compile_args=tokenizer_compile_args,
+        extra_compile_args=['-O3', '-Wall'],
         extra_link_args=[],
     )
     return [gsv_engine_ext, tokenizer_ext]
@@ -145,7 +133,7 @@ def get_build_ext():
             super().run()  # 这会按 ext_modules 顺序构建 pybind11 扩展，并链接 CMake 库
 
         def build_mnn(self):
-            if IS_UNIX and not GSV_ANDROID_BUILD:
+            if not GSV_ANDROID_BUILD:
                 check_gcc_version()
             self.mnn_src_dir = os.path.join(os.path.dirname(__file__), 'extern', 'MNN')
             self.mnn_build_dir = os.path.join(self.mnn_src_dir, 'build')
@@ -180,7 +168,6 @@ def get_build_ext():
                     '-DMNN_BUILD_FOR_ANDROID_COMMAND=true',
                     '-DMNN_OPENCL=ON',
                     '-DMNN_VULKAN=ON',
-                    '-DMNN_OPENGL=ON',
                 ]
             else:
                 cmake_cmd += [
@@ -188,15 +175,6 @@ def get_build_ext():
                     '-DMNN_AVX2=ON',
                     '-DMNN_AVX512=ON',
                 ]
-                if IS_WINDOWS:
-                    cmake_cmd += [
-                        '-DMNN_WIN_RUNTIME_MT=ON',  # Changed from OFF to ON
-                        '-DMNN_OPENCL=ON',
-                        '-DMNN_VULKAN=ON',
-                        '-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded',  # Add this
-                        '-DCMAKE_CXX_FLAGS_RELEASE=/MT /O2',            # Add this
-                        '-DCMAKE_C_FLAGS_RELEASE=/MT /O2',              # Add this
-                    ]
 
             try:
                 subprocess.check_call(cmake_cmd, cwd=self.mnn_build_dir)
@@ -205,8 +183,6 @@ def get_build_ext():
 
             # CMake 构建
             build_cmd = ['cmake', '--build', self.mnn_build_dir, '-j8']
-            if IS_WINDOWS:
-                build_cmd += ['--config', 'Release']
             try:
                 subprocess.check_call(build_cmd, cwd=self.mnn_build_dir)
             except subprocess.CalledProcessError as e:
@@ -215,13 +191,8 @@ def get_build_ext():
 
             self.mnn_dist_dir = os.path.join(self.mnn_src_dir, 'dist')
             os.makedirs(self.mnn_dist_dir, exist_ok=True)
-            if IS_UNIX:
-                for file in glob.glob(os.path.join(self.mnn_build_dir, '*MNN.so*')):
-                    shutil.copy(file, self.mnn_dist_dir)
-                for file in glob.glob(os.path.join(self.mnn_build_dir, 'express', '*MNN_Express.so*')):
-                    shutil.copy(file, self.mnn_dist_dir)
-            else:
-                shutil.copy(os.path.join(self.mnn_build_dir,'Release','MNN.dll'), self.mnn_dist_dir)
+            for file in glob.glob(os.path.join(self.mnn_build_dir, '*MNN.so*')):
+                shutil.copy(file, self.mnn_dist_dir)
 
         def build_tokenizers_cpp(self):
             self.tokenizers_cpp_src_dir = os.path.join(os.path.dirname(__file__), 'extern', 'tokenizers-cpp')
@@ -231,6 +202,8 @@ def get_build_ext():
             cmake_cmd = [
                 'cmake',
                 '-DCMAKE_BUILD_TYPE=Release',
+                '-DCMAKE_CXX_FLAGS=-fPIC',
+                '-DCMAKE_C_FLAGS=-fPIC',
                 '-S', self.tokenizers_cpp_src_dir,
                 '-B', self.tokenizers_cpp_build_dir
             ]
@@ -243,25 +216,11 @@ def get_build_ext():
                     '-DANDROID_ABI=arm64-v8a',
                     '-DANDROID_NATIVE_API_LEVEL=21',
                 ]
-            elif IS_WINDOWS:
-                cmake_cmd += [
-                    '-DTOKENIZERS_CPP_MSVC_RUNTIME_LIBRARY=MT',  # Changed from MD to MT
-                    '-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded',  # Add this
-                    '-DCMAKE_CXX_FLAGS_RELEASE=/MT /O2',           # Changed from /MD to /MT
-                    '-DCMAKE_C_FLAGS_RELEASE=/MT /O2',             # Changed from /MD to /MT
-                ]
-            else:
-                cmake_cmd += [
-                    '-DCMAKE_CXX_FLAGS=-fPIC',
-                    '-DCMAKE_C_FLAGS=-fPIC',
-                ]
             try:
                 subprocess.check_call(cmake_cmd, cwd=self.tokenizers_cpp_build_dir)
             except subprocess.CalledProcessError as e:
                 raise CompileError(f'Tokenizers CMake config failed: {e}')
             build_cmd = ['cmake', '--build', self.tokenizers_cpp_build_dir, '-j8']
-            if IS_WINDOWS:
-                build_cmd += ['--config', 'Release']
             try:
                 subprocess.check_call(build_cmd, cwd=self.tokenizers_cpp_build_dir)
             except subprocess.CalledProcessError as e:
@@ -276,20 +235,19 @@ def get_build_ext():
             # URL for ONNX Runtime Linux x64 package
             ort_version = "1.23.2"
             url = None
-            if IS_WINDOWS:
-                url = f"https://github.com/microsoft/onnxruntime/releases/download/v{ort_version}/onnxruntime-win-x64-{ort_version}.zip"
+            if GSV_ANDROID_BUILD:
+                url = f"https://repo1.maven.org/maven2/com/microsoft/onnxruntime/onnxruntime-android/{ort_version}/onnxruntime-android-{ort_version}.aar"
             else:
                 url = f"https://github.com/microsoft/onnxruntime/releases/download/v{ort_version}/onnxruntime-linux-x64-{ort_version}.tgz"
 
             # Target directory in extern/onnxruntime
             self.onnxruntime_target_dir = os.path.join(os.path.dirname(__file__), 'extern', 'onnxruntime')
-            self.onnxruntime_lib_dir = os.path.join(self.onnxruntime_target_dir, 'lib')
+            self.onnxruntime_lib_dir = os.path.join(self.onnxruntime_target_dir, 'jni', 'arm64-v8a') if GSV_ANDROID_BUILD else os.path.join(self.onnxruntime_target_dir, 'lib')
             self.onnxruntime_dist_dir = os.path.join(self.onnxruntime_target_dir, 'dist')
+            self.onnxruntime_include_dir = os.path.join(self.onnxruntime_target_dir, 'headers') if GSV_ANDROID_BUILD else os.path.join(self.onnxruntime_target_dir, 'include')
 
             # Remove existing directory if it exists
-            if os.path.exists(self.onnxruntime_target_dir) and \
-               (os.path.exists(os.path.join(self.onnxruntime_lib_dir, 'libonnxruntime.so')) or \
-                os.path.exists(os.path.join(self.onnxruntime_lib_dir, 'onnxruntime.dll'))):
+            if os.path.exists(self.onnxruntime_target_dir) and os.path.exists(os.path.join(self.onnxruntime_lib_dir, 'libonnxruntime.so')):
                 return  # 已存在则跳过下载解压
 
             # Create parent directory if it doesn't exist
@@ -301,16 +259,13 @@ def get_build_ext():
             try:
                 response = requests.get(url, stream=True)
                 response.raise_for_status()
-
                 # Create temporary file for download
-                with tempfile.NamedTemporaryFile(suffix='.tgz' if IS_UNIX else '.zip', delete=False) as temp_file:
+                with tempfile.NamedTemporaryFile(suffix='.tgz' if not GSV_ANDROID_BUILD else '.zip', delete=False) as temp_file:
                     for chunk in response.iter_content(chunk_size=8192):
                         if chunk:
                             temp_file.write(chunk)
                     temp_file_path = temp_file.name
-
                 print(f"\nDownloaded ONNX Runtime to temporary file: {temp_file_path}")
-
             except requests.RequestException as e:
                 raise CompileError(f"Failed to download ONNX Runtime: {e}")
 
@@ -319,14 +274,13 @@ def get_build_ext():
             try:
                 with tempfile.TemporaryDirectory() as temp_extract_dir:
                     # Extract to temporary directory first
-                    if IS_UNIX:
+                    if not GSV_ANDROID_BUILD:
                         with tarfile.open(temp_file_path, 'r:gz') as tar:
                             tar.extractall(temp_extract_dir)
                     else:
                         with zipfile.ZipFile(temp_file_path, 'r') as zip_ref:
                             zip_ref.extractall(temp_extract_dir)
-
-                    # Find the extracted directory (should be 'onnxruntime-linux-x64-1.23.1')
+                    
                     extracted_dirs = [d for d in os.listdir(temp_extract_dir)
                                     if os.path.isdir(os.path.join(temp_extract_dir, d)) and d.startswith('onnxruntime')]
 
@@ -339,10 +293,7 @@ def get_build_ext():
                     shutil.move(extracted_dir, self.onnxruntime_target_dir)
 
                     os.makedirs(self.onnxruntime_dist_dir, exist_ok=True)
-                    if IS_UNIX:
-                        shutil.copy(os.path.join(self.onnxruntime_lib_dir, f'libonnxruntime.so.{ort_version}'), os.path.join(self.onnxruntime_dist_dir, 'libonnxruntime.so'))
-                    else:
-                        shutil.copy(os.path.join(self.onnxruntime_lib_dir, 'onnxruntime.dll'), self.onnxruntime_dist_dir)
+                    shutil.copy(os.path.join(self.onnxruntime_lib_dir, f'libonnxruntime.so'), os.path.join(self.onnxruntime_dist_dir, 'libonnxruntime.so'))
 
                 print(f"ONNX Runtime extracted to: {self.onnxruntime_target_dir}")
 
@@ -357,13 +308,13 @@ def get_build_ext():
         def build_extension(self, ext):
             if ext.name == "gsv_oie.gsv_runtime.gsv_engine":
                 ext.library_dirs.extend([
-                    self.mnn_dist_dir if IS_UNIX else os.path.join(self.mnn_build_dir, 'Release'),
+                    self.mnn_dist_dir,
                     self.onnxruntime_lib_dir
                     ])
 
                 ext.include_dirs.extend([
                     os.path.join(self.mnn_src_dir, 'include'),
-                    os.path.join(self.onnxruntime_target_dir, 'include'),
+                    self.onnxruntime_include_dir,
                     os.path.join(os.path.dirname(__file__), 'extern', 'fp16', 'include'),
                 ])
 
@@ -371,16 +322,12 @@ def get_build_ext():
 
             elif ext.name == "gsv_oie.text_preprocess.tokenizers_cpp":
                 ext.library_dirs.extend([self.tokenizers_cpp_build_dir])
-                if IS_WINDOWS:
-                    ext.library_dirs.append(os.path.join(self.tokenizers_cpp_build_dir, 'release'))
 
                 ext.include_dirs.extend([
                     os.path.join(self.tokenizers_cpp_src_dir, 'include'),
                 ])
 
                 ext.libraries.extend(['tokenizers_c','tokenizers_cpp'])
-                if IS_WINDOWS:
-                    ext.libraries.extend(['ntdll', 'ws2_32', 'wsock32', 'Bcrypt', 'userenv', 'iphlpapi', 'psapi'])
 
             super().build_extension(ext)
 
