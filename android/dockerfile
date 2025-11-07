@@ -18,6 +18,7 @@ RUN apt-get update && \
     patchelf \
     wget \
     unzip \
+    openjdk-17-jdk \
     build-essential && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*  # 清理缓存
@@ -96,6 +97,9 @@ RUN rustup target list --installed
 ENV PATH="$ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64/bin:${PATH}"
 
 ENV GSV_ANDROID_BUILD=1
+
+ENV JAVA_HOME=/usr/local/openjdk-17
+ENV PATH=$JAVA_HOME/bin:$PATH
 
 # 设置工作目录
 WORKDIR /app

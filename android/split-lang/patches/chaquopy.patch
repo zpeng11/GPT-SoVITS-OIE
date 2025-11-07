@@ -1,0 +1,45 @@
+diff --git a/setup.py b/setup.py
+index 20f6d26..0d79af7 100644
+--- a/setup.py
++++ b/setup.py
+@@ -25,7 +25,6 @@ setup(
+     packages=find_packages(),
+     install_requires=[
+         "fast_langdetect>=1.0",
+-        "pydantic",
+         "budoux",
+     ],
+     classifiers=[
+diff --git a/split_lang/model.py b/split_lang/model.py
+index f971db4..e6c435a 100644
+--- a/split_lang/model.py
++++ b/split_lang/model.py
+@@ -1,7 +1,6 @@
+ from enum import Enum
+ from typing import List
+-
+-from pydantic import BaseModel
++from dataclasses import dataclass
+ 
+ 
+ class LangSectionType(Enum):
+@@ -14,7 +13,8 @@ class LangSectionType(Enum):
+     ALL = "all"
+ 
+ 
+-class SubString(BaseModel):
++@dataclass
++class SubString:
+     lang: str
+     """language of `text`"""
+     text: str
+@@ -25,7 +25,8 @@ class SubString(BaseModel):
+     """length of `text`"""
+ 
+ 
+-class SubStringSection(BaseModel):
++@dataclass
++class SubStringSection:
+     lang_section_type: LangSectionType
+     """
+     Used for deal with different type of languages

@@ -7,6 +7,13 @@ index 9bc9ebe..18cbf6b 100644
  exclude lib/open_jtalk/src/mecab/src/config.h
  prune lib/open_jtalk/src/build/**
 +recursive-include pyopenjtalk/htsvoice *.htsvoice *.md LICENSE*
+diff --git a/pyopenjtalk/version.py b/pyopenjtalk/version.py
+new file mode 100644
+index 0000000..3d26edf
+--- /dev/null
++++ b/pyopenjtalk/version.py
+@@ -0,0 +1 @@
++__version__ = "0.4.1"
 diff --git a/setup.py b/setup.py
 index 0fb8fad..5512c43 100644
 --- a/setup.py
@@ -71,4 +78,3 @@ index 0fb8fad..5512c43 100644
 +          "Intended Audience :: Developers",
 +      ]
 +    )
-

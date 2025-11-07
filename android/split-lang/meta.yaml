@@ -1,0 +1,13 @@
+package:
+  name: split-lang
+  version: "2.1.1"
+
+source:
+  git_url: https://github.com/DoodleBears/split-lang.git
+  git_rev: 97c54cd373536e88d23e462fb628f4880dc2f41b
+
+requirements:
+  build:
+    - setuptools 64.0.1
+  host:
+    - python
