@@ -63,24 +63,6 @@ RUN /bin/bash -c "yes | sdkmanager --licenses && \
 
 ENV ANDROID_NDK="/opt/android-sdk-linux/ndk/27.3.13750724"
 
-RUN mkdir -p /app/chaquopy/server/pypi/dist/chaquopy-openblas
-RUN wget -O /app/chaquopy/server/pypi/dist/chaquopy-openblas/chaquopy_openblas-0.2.20-5-py3-none-android_21_arm64_v8a.whl https://chaquo.com/pypi-13.1/chaquopy-openblas/chaquopy_openblas-0.2.20-5-py3-none-android_21_arm64_v8a.whl
-
-RUN mkdir -p /app/chaquopy/server/pypi/dist/libgfortran
-RUN wget -O /app/chaquopy/server/pypi/dist/libgfortran/chaquopy_libgfortran-4.9-0-py3-none-android_21_arm64_v8a.whl https://chaquo.com/pypi-13.1/chaquopy-libgfortran/chaquopy_libgfortran-4.9-0-py3-none-android_21_arm64_v8a.whl
-
-RUN mkdir -p /app/chaquopy/server/pypi/dist/chaquopy-libogg
-RUN wget -O /app/chaquopy/server/pypi/dist/chaquopy-libogg/chaquopy_libogg-1.3.4-0-py3-none-android_21_arm64_v8a.whl https://chaquo.com/pypi-13.1/chaquopy-libogg/chaquopy_libogg-1.3.4-0-py3-none-android_21_arm64_v8a.whl
-
-RUN mkdir -p /app/chaquopy/server/pypi/dist/chaquopy-libvorbis
-RUN wget -O /app/chaquopy/server/pypi/dist/chaquopy-libvorbis/chaquopy_libvorbis-1.3.7-0-py3-none-android_21_arm64_v8a.whl https://chaquo.com/pypi-13.1/chaquopy-libvorbis/chaquopy_libvorbis-1.3.7-0-py3-none-android_21_arm64_v8a.whl
-
-RUN mkdir -p /app/chaquopy/server/pypi/dist/chaquopy-flac
-RUN wget -O /app/chaquopy/server/pypi/dist/chaquopy-flac/chaquopy_flac-1.3.3-0-py3-none-android_21_arm64_v8a.whl https://chaquo.com/pypi-13.1/chaquopy-flac/chaquopy_flac-1.3.3-0-py3-none-android_21_arm64_v8a.whl
-
-RUN mkdir -p /app/chaquopy/server/pypi/dist/chaquopy-libsndfile
-RUN wget -O /app/chaquopy/server/pypi/dist/chaquopy-libsndfile/chaquopy_libsndfile-1.0.28-0-py3-none-android_21_arm64_v8a.whl https://chaquo.com/pypi-13.1/chaquopy-libsndfile/chaquopy_libsndfile-1.0.28-0-py3-none-android_21_arm64_v8a.whl
-
 # Install Rust and Cargo via rustup (non-interactive)
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 
@@ -100,6 +82,14 @@ ENV GSV_ANDROID_BUILD=1
 
 ENV JAVA_HOME=/usr/local/openjdk-17
 ENV PATH=$JAVA_HOME/bin:$PATH
+
+RUN wget -q -O /tmp/mecab-0.996-ko-0.9.2.tar.gz https://bitbucket.org/eunjeon/mecab-ko/downloads/mecab-0.996-ko-0.9.2.tar.gz && \
+    cd /tmp && \
+    tar zxvf /tmp/mecab-0.996-ko-0.9.2.tar.gz && \
+    cd mecab-0.996-ko-0.9.2 && \
+    wget -q -O config.sub 'http://git.savannah.gnu.org/gitweb/?p=config.git;a=blob_plain;f=config.sub;hb=HEAD' && \
+    wget -q -O config.guess 'http://git.savannah.gnu.org/gitweb/?p=config.git;a=blob_plain;f=config.guess;hb=HEAD' && \
+    chmod +x config.sub config.guess
 
 # 设置工作目录
 WORKDIR /app
