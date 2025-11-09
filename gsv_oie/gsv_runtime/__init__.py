@@ -25,9 +25,10 @@ def get_library_platform_name(name: str) -> str:
         return f"lib{name}.dylib"
     else:
         return f"lib{name}.so"
+DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..','..'))
 
-CDLL(os.path.join(os.path.dirname(__file__), '..','..','extern','onnxruntime','dist',get_library_platform_name("onnxruntime")), mode=2)
-CDLL(os.path.join(os.path.dirname(__file__), '..','..','extern','MNN','dist',get_library_platform_name("MNN")), mode=2)
+CDLL(os.path.join(DIR,'extern','onnxruntime','dist',get_library_platform_name("onnxruntime")), mode=2)
+CDLL(os.path.join(DIR,'extern','MNN','dist',get_library_platform_name("MNN")), mode=2)
 
 # Try to import the compiled C++ module
 from .gsv_engine import GSVEngine

@@ -7,6 +7,79 @@ index 9bc9ebe..18cbf6b 100644
  exclude lib/open_jtalk/src/mecab/src/config.h
  prune lib/open_jtalk/src/build/**
 +recursive-include pyopenjtalk/htsvoice *.htsvoice *.md LICENSE*
+diff --git a/pyopenjtalk/__init__.py b/pyopenjtalk/__init__.py
+index 656c508..52583c3 100644
+--- a/pyopenjtalk/__init__.py
++++ b/pyopenjtalk/__init__.py
+@@ -11,11 +11,7 @@ from os.path import exists
+ from threading import Lock
+ from typing import TypeVar
+ from urllib.request import urlopen
+-
+-if sys.version_info >= (3, 9):
+-    from importlib.resources import as_file, files
+-else:
+-    from importlib_resources import as_file, files
++from pathlib import Path
+ 
+ try:
+     from .version import __version__  # NOQA
+@@ -27,52 +23,20 @@ from .openjtalk import OpenJTalk
+ from .openjtalk import mecab_dict_index as _mecab_dict_index
+ from .utils import merge_njd_marine_features
+ 
+-_file_manager = ExitStack()
+-atexit.register(_file_manager.close)
+-
+-_pyopenjtalk_ref = files(__name__)
+-_dic_dir_name = "open_jtalk_dic_utf_8-1.11"
+-
+ # Dictionary directory
+ # defaults to the package directory where the dictionary will be automatically downloaded
+ OPEN_JTALK_DICT_DIR = os.environ.get(
+-    "OPEN_JTALK_DICT_DIR",
+-    str(_file_manager.enter_context(as_file(_pyopenjtalk_ref / _dic_dir_name))),
++    "OPEN_JTALK_DICT_DIR"
+ ).encode("utf-8")
+-_dict_download_url = "https://github.com/r9y9/open_jtalk/releases/download/v1.11.1"
+-_DICT_URL = f"{_dict_download_url}/open_jtalk_dic_utf_8-1.11.tar.gz"
+ 
+ # Default mei_normal.voice for HMM-based TTS
+ DEFAULT_HTS_VOICE = str(
+-    _file_manager.enter_context(
+-        as_file(_pyopenjtalk_ref / "htsvoice/mei_normal.htsvoice")
+-    )
++    Path(__file__).parent / "htsvoice" / "mei_normal.htsvoice"
+ ).encode("utf-8")
+ 
+ 
+-def _extract_dic():
+-    from tqdm.auto import tqdm
+-
+-    global OPEN_JTALK_DICT_DIR
+-    pyopenjtalk_dir = _file_manager.enter_context(as_file(_pyopenjtalk_ref))
+-    with tempfile.TemporaryFile() as t:
+-        print('Downloading: "{}"'.format(_DICT_URL))
+-        with urlopen(_DICT_URL) as response:
+-            with tqdm.wrapattr(
+-                t, "write", total=getattr(response, "length", None)
+-            ) as tar:
+-                for chunk in response:
+-                    tar.write(chunk)
+-        t.seek(0)
+-        print("Extracting tar file")
+-        with tarfile.open(mode="r|gz", fileobj=t) as f:
+-            f.extractall(path=pyopenjtalk_dir)
+-    OPEN_JTALK_DICT_DIR = str(pyopenjtalk_dir / _dic_dir_name).encode("utf-8")
+-
+-
+ def _lazy_init():
+-    if not exists(OPEN_JTALK_DICT_DIR):
+-        _extract_dic()
++    pass
+ 
+ 
+ _T = TypeVar("_T")
 diff --git a/pyopenjtalk/version.py b/pyopenjtalk/version.py
 new file mode 100644
 index 0000000..3d26edf

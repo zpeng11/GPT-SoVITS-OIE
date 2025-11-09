@@ -80,7 +80,7 @@ ENV PATH="$ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64/bin:${PATH}"
 
 ENV GSV_ANDROID_BUILD=1
 
-ENV JAVA_HOME=/usr/local/openjdk-17
+ENV JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
 ENV PATH=$JAVA_HOME/bin:$PATH
 
 RUN wget -q -O /tmp/mecab-0.996-ko-0.9.2.tar.gz https://bitbucket.org/eunjeon/mecab-ko/downloads/mecab-0.996-ko-0.9.2.tar.gz && \

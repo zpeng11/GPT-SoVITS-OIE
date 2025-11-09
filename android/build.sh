@@ -11,6 +11,8 @@ cp -r /app/gsv_oie_android/android/fasttext-predict /app/chaquopy/server/pypi/pa
 cp -r /app/gsv_oie_android/android/bsdiff4 /app/chaquopy/server/pypi/packages
 cp -r /app/gsv_oie_android/android/jieba-fast /app/chaquopy/server/pypi/packages
 cp -r /app/gsv_oie_android/android/split-lang /app/chaquopy/server/pypi/packages
+cp -r /app/gsv_oie_android/android/inflect /app/chaquopy/server/pypi/packages
+cp -r /app/gsv_oie_android/android/gsv_oie /app/chaquopy/server/pypi/packages/gsv-oie
 
 cd /tmp/mecab-0.996-ko-0.9.2
 chmod +x config.sub config.guess
@@ -56,7 +58,13 @@ cp /tmp/mecab-0.996-ko-0.9.2/build/lib/libmecab.* \
 ./build-wheel.py --python 3.10 --abi arm64-v8a --api-level 21 bsdiff4
 ./build-wheel.py --python 3.10 --abi arm64-v8a --api-level 21 jieba-fast
 ./build-wheel.py --python 3.10 --abi arm64-v8a --api-level 21 split-lang
+./build-wheel.py --python 3.10 --abi arm64-v8a --api-level 21 inflect
+./build-wheel.py --python 3.10 --abi arm64-v8a --api-level 21 gsv-oie
 
 mkdir -p /app/gsv_oie_android/android/dist
 find /app/chaquopy/server/pypi/dist -name "*.whl" -exec cp {} /app/gsv_oie_android/android/dist/ \;
 chmod -R a+r+w /app/gsv_oie_android/android/dist
+
+cd /app/gsv_oie_android/android/chaquopy-console
+./gradlew assembleDebug && cp app/build/outputs/apk/debug/app-debug.apk /app/gsv_oie_android/build
+chmod -R a+r+w /app/gsv_oie_android/android/chaquopy-console

@@ -128,7 +128,7 @@ void convert_vector_int32_to_int64(int64_t* dst, const int32_t* src, ssize_t siz
 #ifdef _WIN32
 #include <malloc.h>  // For _aligned_malloc and _aligned_free on Windows
 #else
-#include <cstdlib>   // For std::aligned_alloc and std::free on POSIX
+#include <stdlib.h> //For posix_memalign and free on POSIX
 #endif
 #include <memory>    // For std::assume_aligned (optional, for compiler hints)
 #include <new>       // std::bad_alloc
@@ -167,10 +167,13 @@ struct aligned_allocator {
         // Windows: _aligned_malloc(size, alignment)
         p = _aligned_malloc(total_size, Alignment);
 #else
-        // POSIX: std::aligned_alloc(alignment, size)
         // Note: size must be a multiple of alignment
         const size_type aligned_size = ((total_size + Alignment - 1) / Alignment) * Alignment;
-        p = std::aligned_alloc(Alignment, aligned_size);
+        int rc = posix_memalign(&p, Alignment, aligned_size);
+        if (rc != 0) {
+            // Handle error: e.g., throw std::bad_alloc() or return nullptr
+            p = nullptr;
+        }
 #endif
         
         if (!p) throw std::bad_alloc{};

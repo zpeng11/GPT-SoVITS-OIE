@@ -1,0 +1,13 @@
+package:
+  name: inflect
+  version: "7.5.0"
+
+source:
+  git_url: https://github.com/jaraco/inflect.git
+  git_rev: c079a96a573ece60b54bd5210bb0f414beb74dcd
+
+requirements:
+  build:
+    - setuptools 64.0.1
+  host:
+    - python

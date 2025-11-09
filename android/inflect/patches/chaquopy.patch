@@ -1,0 +1,44 @@
+diff --git a/inflect/__init__.py b/inflect/__init__.py
+index 3eef486..ea4f224 100644
+--- a/inflect/__init__.py
++++ b/inflect/__init__.py
+@@ -78,7 +78,9 @@ from typing import (
+ )
+ 
+ from more_itertools import windowed_complete
+-from typeguard import typechecked
++# No-op decorator for production/Android
++def typechecked(func):
++    return func
+ 
+ from .compat.py38 import Annotated
+ 
+diff --git a/pyproject.toml b/pyproject.toml
+index 3ec9664..42f86a0 100644
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -1,5 +1,5 @@
+ [build-system]
+-requires = ["setuptools>=61.2", "setuptools_scm[toml]>=3.4.1"]
++requires = ["setuptools>=61.2"]
+ build-backend = "setuptools.build_meta"
+ 
+ [project]
+@@ -34,7 +34,7 @@ keywords = [
+ 	"inflect",
+ 	"participle",
+ ]
+-dynamic = ["version"]
++version = "7.5.0"
+ 
+ [project.urls]
+ Source = "https://github.com/jaraco/inflect"
+@@ -83,8 +83,5 @@ type = [
+ ]
+ 
+ 
+-[tool.setuptools_scm]
+-
+-
+ [tool.pytest-enabler.mypy]
+ # Disabled due to jaraco/skeleton#143

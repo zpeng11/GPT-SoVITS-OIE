@@ -21,14 +21,13 @@ DIR = os.path.abspath(os.path.dirname(__file__))
 sys.path.insert(0, os.path.join(DIR, "extern", "pybind11"))
 
 # Get the long description from the README file
-current_dir = os.path.abspath(os.path.dirname(__file__))
-with open(os.path.join(current_dir, 'README.md'), encoding='utf-8') as f:
+with open(os.path.join(DIR, 'README.md'), encoding='utf-8') as f:
     long_description = f.read()
 
 # Read requirements from requirements.txt
 def read_requirements():
     """Read requirements from requirements.txt file"""
-    requirements_path = os.path.join(os.path.dirname(__file__), 'requirements.txt')
+    requirements_path = os.path.join(DIR, 'requirements.txt')
     with open(requirements_path, 'r', encoding='utf-8') as f:
         requirements = []
         for line in f:
@@ -82,7 +81,7 @@ def get_gsv_engine_ext():
 
     engine_compiler_args = ['-O3', '-Wall', '-fopenmp']
     if GSV_ANDROID_BUILD:
-        engine_compiler_args.extend(['-mfp16-format=ieee'])
+        engine_compiler_args.extend(['-march=armv8-a+fp16'])
     # Define the C++ extension
     gsv_engine_ext = Pybind11Extension(
         "gsv_oie.gsv_runtime.gsv_engine",
@@ -91,7 +90,7 @@ def get_gsv_engine_ext():
             "gsv_oie/gsv_runtime/cpp/MNNInferenceEngineInterpreter.cpp",
             "gsv_oie/gsv_runtime/cpp/utils.cpp",
         ],
-        include_dirs=[pybind11.get_include(), os.path.join(os.path.dirname(__file__), 'gsv_oie', 'gsv_runtime', 'cpp')],
+        include_dirs=[pybind11.get_include(), os.path.join(DIR, 'gsv_oie', 'gsv_runtime', 'cpp')],
         library_dirs=[],
         libraries=[],
         cxx_std=17,
@@ -135,7 +134,7 @@ def get_build_ext():
         def build_mnn(self):
             if not GSV_ANDROID_BUILD:
                 check_gcc_version()
-            self.mnn_src_dir = os.path.join(os.path.dirname(__file__), 'extern', 'MNN')
+            self.mnn_src_dir = os.path.join(DIR, 'extern', 'MNN')
             self.mnn_build_dir = os.path.join(self.mnn_src_dir, 'build')
             # 确保构建目录
             if not os.path.exists(self.mnn_build_dir):
@@ -195,7 +194,7 @@ def get_build_ext():
                 shutil.copy(file, self.mnn_dist_dir)
 
         def build_tokenizers_cpp(self):
-            self.tokenizers_cpp_src_dir = os.path.join(os.path.dirname(__file__), 'extern', 'tokenizers-cpp')
+            self.tokenizers_cpp_src_dir = os.path.join(DIR, 'extern', 'tokenizers-cpp')
             self.tokenizers_cpp_build_dir = os.path.join(self.tokenizers_cpp_src_dir, 'build')
             if not os.path.exists(self.tokenizers_cpp_build_dir):
                 os.makedirs(self.tokenizers_cpp_build_dir, exist_ok=True)
@@ -241,7 +240,7 @@ def get_build_ext():
                 url = f"https://github.com/microsoft/onnxruntime/releases/download/v{ort_version}/onnxruntime-linux-x64-{ort_version}.tgz"
 
             # Target directory in extern/onnxruntime
-            self.onnxruntime_target_dir = os.path.join(os.path.dirname(__file__), 'extern', 'onnxruntime')
+            self.onnxruntime_target_dir = os.path.join(DIR, 'extern', 'onnxruntime')
             self.onnxruntime_lib_dir = os.path.join(self.onnxruntime_target_dir, 'jni', 'arm64-v8a') if GSV_ANDROID_BUILD else os.path.join(self.onnxruntime_target_dir, 'lib')
             self.onnxruntime_dist_dir = os.path.join(self.onnxruntime_target_dir, 'dist')
             self.onnxruntime_include_dir = os.path.join(self.onnxruntime_target_dir, 'headers') if GSV_ANDROID_BUILD else os.path.join(self.onnxruntime_target_dir, 'include')
@@ -279,7 +278,7 @@ def get_build_ext():
                             tar.extractall(temp_extract_dir)
                     else:
                         with zipfile.ZipFile(temp_file_path, 'r') as zip_ref:
-                            zip_ref.extractall(temp_extract_dir)
+                            zip_ref.extractall(os.path.join(temp_extract_dir, 'onnxruntime'))
                     
                     extracted_dirs = [d for d in os.listdir(temp_extract_dir)
                                     if os.path.isdir(os.path.join(temp_extract_dir, d)) and d.startswith('onnxruntime')]
@@ -315,7 +314,7 @@ def get_build_ext():
                 ext.include_dirs.extend([
                     os.path.join(self.mnn_src_dir, 'include'),
                     self.onnxruntime_include_dir,
-                    os.path.join(os.path.dirname(__file__), 'extern', 'fp16', 'include'),
+                    os.path.join(DIR, 'extern', 'fp16', 'include'),
                 ])
 
                 ext.libraries.extend(['MNN', 'onnxruntime'])
@@ -401,18 +400,7 @@ setup(
 
     # Dependencies
     install_requires=read_requirements(),
-
-    # Optional dependencies for different language support
-    extras_require={
-        'mnn':['mnn'],
-        'dev': [
-            'pytest>=6.0',
-            'black>=21.0',
-            'flake8>=3.8',
-            'mypy>=0.800',
-        ]
-    },
-
+    
     # C++ extension modules
     ext_modules=get_gsv_engine_ext(),
     cmdclass={

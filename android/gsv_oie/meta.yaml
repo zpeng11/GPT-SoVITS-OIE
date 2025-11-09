@@ -1,0 +1,13 @@
+package:
+  name: gsv_oie
+  version: "1.0.0"
+
+source:
+  path: /app/gsv_oie_android
+
+requirements:
+  build:
+    - setuptools 64.0.1
+    - cmake 3.29.2
+  host:
+    - python
